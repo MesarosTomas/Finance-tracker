@@ -712,28 +712,80 @@ function TxRow({tx,onEdit,onDel,accounts}){
   );
 }
 
-// ── OBEDY TAB ──────────────────────────────────────────────────────────────
+// ── OBEDY TAB ─────────────────────────────────────────────────────────────
 function ObedyTab({month,year,oaData,saveOa}){
   const key=`${year}-${month}`;
-  const md=oaData[key]||{dailyRate:7.28,days:{}};
+  const md=oaData[key]||{dailyRate:7.28,days:{},wInv:{}};
   const [editRate,setEditRate]=useState(false);
   const [rateVal,setRateVal]=useState(String(md.dailyRate));
   useEffect(()=>setRateVal(String((oaData[key]||{dailyRate:7.28}).dailyRate)),[key,JSON.stringify(oaData[key])]);
+
   const dim=new Date(year,month,0).getDate();
   const getDOW=d=>new Date(year,month-1,d).getDay();
   const isWknd=d=>{const dw=getDOW(d);return dw===0||dw===6;};
   const getDayData=d=>{const s=md.days[String(d)];if(s)return s;return{dayOff:isWknd(d),spent:0};};
-  const updateDay=useCallback((d,patch)=>{const prev=getDayData(d);const upd={...oaData,[key]:{...md,days:{...md.days,[String(d)]:{...prev,...patch}}}};saveOa(upd);},[oaData,key,md]);
+
+  const updateDay=useCallback((d,patch)=>{
+    const prev=getDayData(d);
+    saveOa({...oaData,[key]:{...md,days:{...md.days,[String(d)]:{...prev,...patch}}}});
+  },[oaData,key,md]);
+
   const saveRate=()=>{const r=parseFloat(rateVal)||7.28;saveOa({...oaData,[key]:{...md,dailyRate:r}});setEditRate(false);};
-  const rows=Array.from({length:dim},(_,i)=>i+1).map(d=>{const dd=getDayData(d);const wknd=isWknd(d);const dayOff=dd.dayOff??wknd;const narok=dayOff?0:md.dailyRate;const spent=parseFloat(dd.spent)||0;return{d,dayOff,wknd,narok,spent,rozdiel:narok-spent,dn:DNAMES[getDOW(d)]};});
+
+  // Week investment helpers (stored as md.wInv)
+  const getWInv=wi=>parseFloat(((md.wInv||{})[String(wi)])||0)||0;
+  const setWInv=(wi,val)=>{
+    saveOa({...oaData,[key]:{...md,wInv:{...(md.wInv||{}),[String(wi)]:val}}});
+  };
+
+  // Build rows
+  const rows=Array.from({length:dim},(_,i)=>i+1).map(d=>{
+    const dd=getDayData(d);
+    const wknd=isWknd(d);
+    const dayOff=dd.dayOff??wknd;
+    const narok=dayOff?0:md.dailyRate;
+    const spent=parseFloat(dd.spent)||0;
+    // hasEntry: user explicitly stored data for this workday (even 0.00)
+    const hasEntry=!wknd&&!dayOff&&md.days[String(d)]!==undefined;
+    return{d,dayOff,wknd,narok,spent,rozdiel:narok-spent,dn:DNAMES[getDOW(d)],hasEntry};
+  });
+
+  // Group into weeks (break on Sunday or last day)
   const weeks=[];let wk=[];
   for(const row of rows){wk.push(row);if(getDOW(row.d)===0||row.d===dim){weeks.push(wk);wk=[];}}
   if(wk.length>0)weeks.push(wk);
-  const totN=rows.reduce((s,r)=>s+r.narok,0),totS=rows.reduce((s,r)=>s+r.spent,0),totR=totN-totS;
+
+  // Calculate weekly stats with carry-over accumulation
+  const weekStats=[];
+  let carry=0;
+  for(let wi=0;wi<weeks.length;wi++){
+    const wkR=weeks[wi];
+    const wN=wkR.reduce((s,r)=>s+r.narok,0);
+    const wS=wkR.reduce((s,r)=>s+r.spent,0);
+    const wR=wkR.reduce((s,r)=>s+r.rozdiel,0);
+    // Only accumulate positive savings; overspending doesn't reduce investment pool
+    const acc=Math.max(0,carry)+Math.max(0,wR);
+    const inv=getWInv(wi);
+    const remaining=Math.max(0,acc-inv);
+    weekStats.push({wN,wS,wR,acc,inv,remaining,hasWork:wN>0,prevCarry:carry});
+    carry=remaining;
+  }
+
+  const totN=rows.reduce((s,r)=>s+r.narok,0);
+  const totS=rows.reduce((s,r)=>s+r.spent,0);
+  const totR=totN-totS;
+  const totInv=Array.from({length:weeks.length},(_,i)=>getWInv(i)).reduce((s,v)=>s+v,0);
+
   return(
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:10}}>
-        {[{l:"Celkový nárok",v:totN,c:"#3b82f6",i:"📋"},{l:"Reálne minuté",v:totS,c:"#ef4444",i:"💳"},{l:"Úspora na obedoch",v:totR,c:totR>=0?"#10b981":"#ef4444",i:"✅"}].map(({l,v,c,i})=>(
+      {/* KPI cards */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10}}>
+        {[
+          {l:"Celkový nárok",v:totN,c:"#3b82f6",i:"📋"},
+          {l:"Reálne minuté",v:totS,c:"#ef4444",i:"💳"},
+          {l:"Úspora obedy",v:totR,c:totR>=0?"#10b981":"#ef4444",i:"✅"},
+          {l:"Investované CAR_pie",v:totInv,c:"#a855f7",i:"📈"},
+        ].map(({l,v,c,i})=>(
           <div key={l} className="card" style={{padding:"13px 15px"}}>
             <div style={{fontSize:11,color:"var(--text3)",marginBottom:4}}>{i} {l}</div>
             <div className="mono" style={{fontSize:17,fontWeight:700,color:c}}>{fmt(v)}</div>
@@ -754,28 +806,49 @@ function ObedyTab({month,year,oaData,saveOa}){
           )}
         </div>
       </div>
+
       <div className="card" style={{overflow:"hidden"}}>
         <div style={{padding:"12px 15px",borderBottom:"1px solid var(--border)",fontWeight:600,fontSize:13,display:"flex",justifyContent:"space-between"}}>
           <span>🍽️ {MONTHS[month-1]} {year}</span>
           <span style={{fontSize:11,color:"var(--text3)"}}>{rows.filter(r=>!r.dayOff).length} pracovných dní</span>
         </div>
         <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-            <thead><tr style={{borderBottom:"1px solid var(--border)"}}>
-              {["#","Deň","Typ","Nárok (€)","Zaplatené (€)","Rozdiel (€)"].map((h,i)=>(
-                <th key={i} style={{padding:"8px 11px",textAlign:i>=3?"right":"left",color:"var(--text3)",fontWeight:600,fontSize:10,letterSpacing:".5px",textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {weeks.map((wk,wi)=>{
-                const wN=wk.reduce((s,r)=>s+r.narok,0),wS=wk.reduce((s,r)=>s+r.spent,0),wR=wN-wS;
-                return <tbody key={wi}>
+          {/* FIX: use colgroup + multiple tbodys (not nested) for correct alignment */}
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,tableLayout:"fixed"}}>
+            <colgroup>
+              <col style={{width:"42px"}}/>
+              <col style={{width:"36px"}}/>
+              <col style={{width:"150px"}}/>
+              <col style={{width:"100px"}}/>
+              <col style={{width:"130px"}}/>
+              <col style={{width:"110px"}}/>
+            </colgroup>
+            <thead>
+              <tr style={{borderBottom:"1px solid var(--border)"}}>
+                {["#","Deň","Typ","Nárok €","Zaplatené €","Rozdiel €"].map((h,i)=>(
+                  <th key={i} style={{padding:"8px 11px",textAlign:i>=3?"right":"left",color:"var(--text3)",fontWeight:600,fontSize:10,letterSpacing:".5px",textTransform:"uppercase"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+
+            {/* Multiple tbodys — one per week — NO nesting */}
+            {weeks.map((wk,wi)=>{
+              const ws=weekStats[wi];
+              return(
+                <tbody key={wi}>
                   {wk.map(row=>{
                     const wknd=row.wknd;
+                    // Row background logic
+                    let rowBg="transparent";
+                    if(wknd) rowBg="var(--alt)";
+                    else if(row.dayOff) rowBg="var(--hover)";
+                    else if(row.hasEntry) rowBg="rgba(16,185,129,0.08)"; // subtle green = recorded
                     return(
-                      <tr key={row.d} className="drow" style={{background:wknd?"var(--alt)":row.dayOff?"var(--hover)":"transparent",opacity:wknd?.5:1}}>
-                        <td style={{padding:"7px 11px",color:"var(--text3)",fontWeight:600,width:36}}>{row.d}</td>
-                        <td style={{padding:"7px 5px",color:"var(--text3)",fontSize:11,width:30}}>{row.dn}</td>
+                      <tr key={row.d} style={{background:rowBg,opacity:wknd?.45:1,borderBottom:"1px solid var(--border)",transition:"background .25s"}}>
+                        <td style={{padding:"7px 11px",color:row.hasEntry?"var(--text2)":"var(--text3)",fontWeight:row.hasEntry?700:600}}>
+                          {row.hasEntry&&<span style={{color:"#10b981",marginRight:3,fontSize:10}}>●</span>}{row.d}
+                        </td>
+                        <td style={{padding:"7px 5px",color:"var(--text3)",fontSize:11}}>{row.dn}</td>
                         <td style={{padding:"7px 11px"}}>
                           {wknd?<span style={{fontSize:11,color:"var(--border)",fontStyle:"italic"}}>{getDOW(row.d)===0?"Nedeľa":"Sobota"}</span>:(
                             <button onClick={()=>updateDay(row.d,{dayOff:!row.dayOff,spent:row.spent})}
@@ -784,26 +857,75 @@ function ObedyTab({month,year,oaData,saveOa}){
                           )}
                         </td>
                         <td className="mono" style={{padding:"7px 11px",textAlign:"right",color:row.narok>0?"#3b82f6":"var(--border)",fontWeight:600}}>{row.narok>0?row.narok.toFixed(2)+" €":"—"}</td>
-                        <td style={{padding:"7px 11px",textAlign:"right"}}>{!row.dayOff&&!wknd?<DayCell value={row.spent} onSave={v=>updateDay(row.d,{dayOff:false,spent:v})}/>:<span style={{color:"var(--border)"}}>—</span>}</td>
-                        <td className="mono" style={{padding:"7px 11px",textAlign:"right",fontWeight:700,color:!row.dayOff&&!wknd?(row.rozdiel>0?"#10b981":row.rozdiel<0?"#ef4444":"var(--text3)"):"var(--border)"}}>{!row.dayOff&&!wknd?((row.rozdiel>=0?"+":"")+row.rozdiel.toFixed(2)+" €"):"—"}</td>
+                        <td style={{padding:"7px 11px",textAlign:"right"}}>
+                          {!row.dayOff&&!wknd?<DayCell value={row.spent} onSave={v=>updateDay(row.d,{dayOff:false,spent:v})}/>:<span style={{color:"var(--border)"}}>—</span>}
+                        </td>
+                        <td className="mono" style={{padding:"7px 11px",textAlign:"right",fontWeight:700,
+                          color:!row.dayOff&&!wknd?(row.rozdiel>0?"#10b981":row.rozdiel<0?"#ef4444":"var(--text3)"):"var(--border)"}}>
+                          {!row.dayOff&&!wknd?((row.rozdiel>=0?"+":"")+row.rozdiel.toFixed(2)+" €"):"—"}
+                        </td>
                       </tr>
                     );
                   })}
-                  {wN>0&&<tr style={{background:"var(--alt)",borderBottom:"2px solid var(--border)"}}>
-                    <td colSpan={3} style={{padding:"5px 11px",fontSize:10,color:"var(--text3)",fontWeight:700,letterSpacing:".5px"}}>📊 TÝŽDEŇ {wi+1}</td>
-                    <td className="mono" style={{padding:"5px 11px",textAlign:"right",color:"#3b82f6",fontSize:12,fontWeight:700}}>{wN.toFixed(2)} €</td>
-                    <td className="mono" style={{padding:"5px 11px",textAlign:"right",color:"var(--text)",fontSize:12,fontWeight:700}}>{wS.toFixed(2)} €</td>
-                    <td className="mono" style={{padding:"5px 11px",textAlign:"right",fontSize:12,fontWeight:700,color:wR>=0?"#10b981":"#ef4444"}}>{wR>=0?"+":""}{wR.toFixed(2)} €</td>
-                  </tr>}
-                </tbody>;
-              })}
-            </tbody>
-            <tfoot><tr style={{background:"var(--surface)",borderTop:"2px solid var(--inp-b)"}}>
-              <td colSpan={3} style={{padding:"10px 11px",fontWeight:800,fontSize:11,color:"var(--text2)",letterSpacing:".5px"}}>MESAČNÝ SÚČET</td>
-              <td className="mono" style={{padding:"10px 11px",textAlign:"right",color:"#3b82f6",fontWeight:800}}>{totN.toFixed(2)} €</td>
-              <td className="mono" style={{padding:"10px 11px",textAlign:"right",color:"var(--text)",fontWeight:800}}>{totS.toFixed(2)} €</td>
-              <td className="mono" style={{padding:"10px 11px",textAlign:"right",fontWeight:800,color:totR>=0?"#10b981":"#ef4444"}}>{totR>=0?"+":""}{totR.toFixed(2)} €</td>
-            </tr></tfoot>
+
+                  {/* Week summary row */}
+                  {ws.hasWork&&(
+                    <tr style={{background:"var(--alt)"}}>
+                      <td colSpan={3} style={{padding:"5px 11px",fontSize:10,color:"var(--text3)",fontWeight:700,letterSpacing:".5px"}}>📊 TÝŽDEŇ {wi+1}</td>
+                      <td className="mono" style={{padding:"5px 11px",textAlign:"right",color:"#3b82f6",fontSize:12,fontWeight:700}}>{ws.wN.toFixed(2)} €</td>
+                      <td className="mono" style={{padding:"5px 11px",textAlign:"right",color:"var(--text)",fontSize:12,fontWeight:700}}>{ws.wS.toFixed(2)} €</td>
+                      <td className="mono" style={{padding:"5px 11px",textAlign:"right",fontSize:12,fontWeight:700,color:ws.wR>=0?"#10b981":"#ef4444"}}>{ws.wR>=0?"+":""}{ws.wR.toFixed(2)} €</td>
+                    </tr>
+                  )}
+
+                  {/* CAR_pie investment row */}
+                  {ws.hasWork&&(
+                    <tr style={{borderBottom:"2px solid var(--border)"}}>
+                      <td colSpan={6} style={{padding:"8px 11px",background:"#080f20"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap",fontSize:12}}>
+                          <span style={{color:"#a855f7",fontWeight:700,whiteSpace:"nowrap"}}>📈 CAR_pie</span>
+
+                          <div style={{display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>
+                            <span style={{color:"var(--text3)"}}>K dispozícii:</span>
+                            <span className="mono" style={{color:"#f59e0b",fontWeight:700}}>{ws.acc.toFixed(2)} €</span>
+                            {wi>0&&weekStats[wi-1].remaining>0&&(
+                              <span style={{color:"var(--text3)",fontSize:10,fontStyle:"italic"}}>
+                                (z toho {weekStats[wi-1].remaining.toFixed(2)} € z min. týžd.)
+                              </span>
+                            )}
+                          </div>
+
+                          <div style={{display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>
+                            <span style={{color:"var(--text3)"}}>Investoval som:</span>
+                            <InvestCell value={ws.inv} onSave={v=>setWInv(wi,v)}/>
+                            <span style={{color:"var(--text3)"}}>€</span>
+                          </div>
+
+                          <div style={{display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>
+                            <span style={{color:"var(--text3)"}}>Prechádza ďalej →</span>
+                            <span className="mono" style={{
+                              color:ws.remaining>0?"#10b981":ws.remaining===0?"var(--text3)":"#ef4444",
+                              fontWeight:700,
+                              background:ws.remaining===0?"transparent":"rgba(16,185,129,0.1)",
+                              padding:"1px 6px",borderRadius:6
+                            }}>{ws.remaining.toFixed(2)} €</span>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              );
+            })}
+
+            <tfoot>
+              <tr style={{background:"var(--surface)",borderTop:"2px solid var(--inp-b)"}}>
+                <td colSpan={3} style={{padding:"10px 11px",fontWeight:800,fontSize:11,color:"var(--text2)",letterSpacing:".5px"}}>MESAČNÝ SÚČET</td>
+                <td className="mono" style={{padding:"10px 11px",textAlign:"right",color:"#3b82f6",fontWeight:800}}>{totN.toFixed(2)} €</td>
+                <td className="mono" style={{padding:"10px 11px",textAlign:"right",color:"var(--text)",fontWeight:800}}>{totS.toFixed(2)} €</td>
+                <td className="mono" style={{padding:"10px 11px",textAlign:"right",fontWeight:800,color:totR>=0?"#10b981":"#ef4444"}}>{totR>=0?"+":""}{totR.toFixed(2)} €</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
@@ -817,7 +939,25 @@ function DayCell({value,onSave}){
   useEffect(()=>{if(value!==prev.current){setV(value===0?"":String(value));prev.current=value;}},[value]);
   const handleChange=e=>{const raw=e.target.value.replace(",",".");if(/^(\d*\.?\d{0,2})?$/.test(raw))setV(raw);};
   const handleBlur=()=>{const n=parseFloat(v)||0;onSave(n);prev.current=n;};
-  return(<div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:4}}><input type="text" inputMode="decimal" className="inp-sm" value={v} onChange={handleChange} onBlur={handleBlur} placeholder="0.00"/><span style={{fontSize:11,color:"var(--text3)"}}>€</span></div>);
+  return(
+    <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:4}}>
+      <input type="text" inputMode="decimal" className="inp-sm" value={v} onChange={handleChange} onBlur={handleBlur} placeholder="0.00"/>
+      <span style={{fontSize:11,color:"var(--text3)"}}>€</span>
+    </div>
+  );
+}
+
+function InvestCell({value,onSave}){
+  const [v,setV]=useState(value===0?"":String(value));
+  const prev=useRef(value);
+  useEffect(()=>{if(value!==prev.current){setV(value===0?"":String(value));prev.current=value;}},[value]);
+  const handleChange=e=>{const raw=e.target.value.replace(",",".");if(/^(\d*\.?\d{0,2})?$/.test(raw))setV(raw);};
+  const handleBlur=()=>{const n=parseFloat(v)||0;onSave(n);prev.current=n;};
+  return(
+    <input type="text" inputMode="decimal" value={v} onChange={handleChange} onBlur={handleBlur}
+      placeholder="0.00" className="inp-sm"
+      style={{width:80,borderColor:parseFloat(v)>0?"#a855f7":"var(--inp-b)",color:parseFloat(v)>0?"#a855f7":"var(--text)",fontWeight:parseFloat(v)>0?700:400}}/>
+  );
 }
 
 // ── SPORENIE TAB ───────────────────────────────────────────────────────────
