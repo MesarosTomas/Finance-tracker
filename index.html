@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>💰 FinanceTracker</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/recharts@2.15.0/umd/Recharts.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.4/babel.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#070c18;color:#e2e8f0;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:#0f172a}
+::-webkit-scrollbar-thumb{background:#334155;border-radius:2px}
+.card{background:#0d1526;border:1px solid #1a2540;border-radius:14px}
+.inp{background:#131f35;border:1px solid #253556;border-radius:8px;padding:10px 14px;color:#e2e8f0;font-size:14px;width:100%;outline:none;font-family:inherit;transition:border-color .2s}
+.inp:focus{border-color:#10b981}
+.inp option{background:#1e293b}
+.inp-sm{background:#131f35;border:1px solid #253556;border-radius:6px;padding:3px 7px;color:#e2e8f0;font-size:12px;outline:none;font-family:'Courier New',monospace;width:75px;text-align:right;transition:border-color .2s}
+.inp-sm:focus{border-color:#10b981}
+.btn{background:#10b981;color:#002b1a;border:none;border-radius:8px;padding:10px 20px;font-weight:700;cursor:pointer;font-size:14px;font-family:inherit;transition:all .15s}
+.btn:hover{background:#0d9b6e}
+.btn-g{background:#131f35;color:#94a3b8;border:1px solid #253556;border-radius:8px;padding:10px 16px;cursor:pointer;font-size:14px;font-family:inherit;transition:all .15s}
+.btn-g:hover{background:#1e293b;color:#cbd5e1}
+.btn-sm{background:#131f35;color:#64748b;border:1px solid #1e293b;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:12px;font-family:inherit}
+.btn-sm:hover{background:#1e293b;color:#94a3b8}
+.tab{padding:7px 13px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .2s;font-family:inherit;white-space:nowrap}
+.tab.on{background:#10b981;color:#001a0d}
+.tab:not(.on){background:transparent;color:#64748b}
+.tab:not(.on):hover{color:#94a3b8;background:#131f35}
+.mono{font-family:'Courier New',monospace}
+.txrow{border-bottom:1px solid #111e33;padding:11px 16px;display:flex;align-items:flex-start;gap:10px;transition:background .12s}
+.txrow:last-child{border-bottom:none}
+.txrow:hover{background:#0d1526}
+.bdg{padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700}
+.ov{position:fixed;inset:0;background:rgba(0,5,15,.85);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)}
+.modal{background:#0d1526;border:1px solid #1a2540;border-radius:18px;padding:26px;width:100%;max-width:490px;max-height:90vh;overflow-y:auto}
+.pbar{height:6px;background:#1a2540;border-radius:3px;overflow:hidden}
+.pfill{height:100%;border-radius:3px;transition:width .5s}
+.fab{position:fixed;bottom:24px;right:24px;width:56px;height:56px;border-radius:50%;background:#10b981;color:#001a0d;border:none;font-size:28px;cursor:pointer;box-shadow:0 4px 24px rgba(16,185,129,.45);display:flex;align-items:center;justify-content:center;z-index:50;transition:all .2s}
+.fab:hover{background:#0d9b6e;transform:scale(1.06)}
+.ibtn{background:none;border:none;cursor:pointer;padding:5px;border-radius:6px;font-size:14px;line-height:1;transition:background .15s}
+.ibtn:hover{background:#1a2540}
+.stit{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#475569;margin-bottom:12px}
+.tbtn{flex:1;padding:9px 4px;border-radius:8px;border:1px solid #253556;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:all .15s}
+.drow{border-bottom:1px solid #0d1828;transition:background .1s}
+.drow:hover{background:#0a1220 !important}
+.ctbl{border-collapse:collapse;font-size:12px;width:100%}
+.ctbl th{padding:9px 10px;text-align:right;color:#475569;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;border-bottom:1px solid #1a2540}
+.ctbl th:first-child{text-align:left}
+.ctbl td{padding:7px 10px;border-bottom:1px solid #0d1828;text-align:right}
+.ctbl td:first-child{text-align:left;color:#94a3b8;font-size:12px}
+.ctbl tr:last-child td{border-bottom:none}
+.ctbl tfoot td{background:#091220;border-top:2px solid #1a2540;font-weight:700;padding:9px 10px;text-align:right}
+.ctbl tfoot td:first-child{text-align:left;color:#64748b;font-size:11px;letter-spacing:.5px;text-transform:uppercase}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useMemo,useCallback,useRef} = React;
+const RC = window.Recharts||{};
+const {BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,PieChart,Pie,Cell} = RC;
+
+// ── CONSTANTS ─────────────────────────────────────────────────────────────
+const EXP_CATS = ["Hypotéka","MBA - škola","Investovanie","Tankovanie","Potraviny nákup","Auto","Poistenie","Darčeky","Reštaurácia + káva","Sporenie","Transport - taxi","Bary - alkohol","Baby fond","Telefón","Predplatné (TV…)","Osobná starostlivosť","Oblečenie","Bolt food","Voľnočasové aktivity","Domácnosť","Pracovné obedy","Energie byt","Nezaradené"];
+const INC_CATS = ["Výplata","Bonus","Freelance","Iný príjem"];
+const DEF_BUDGETS = {"Hypotéka":597.92,"MBA - škola":278.3,"Investovanie":83,"Tankovanie":0,"Potraviny nákup":180,"Auto":0,"Poistenie":50.24,"Darčeky":0,"Reštaurácia + káva":50,"Sporenie":10,"Transport - taxi":15,"Bary - alkohol":20,"Baby fond":0,"Telefón":25,"Predplatné (TV…)":35,"Osobná starostlivosť":30,"Oblečenie":0,"Bolt food":0,"Voľnočasové aktivity":100,"Domácnosť":555,"Pracovné obedy":0,"Energie byt":112,"Nezaradené":20};
+const MONTHS = ["Január","Február","Marec","Apríl","Máj","Jún","Júl","August","September","Október","November","December"];
+const DNAMES = ["Ne","Po","Ut","St","Šv","Pi","So"];
+const PCOLS = ["#10b981","#3b82f6","#f59e0b","#a855f7","#06b6d4","#f97316","#ec4899","#84cc16","#14b8a6","#6366f1","#ef4444","#8b5cf6"];
+const GCOLS = ["#10b981","#3b82f6","#f59e0b","#a855f7","#06b6d4","#f97316","#ec4899","#84cc16"];
+const GICONS = ["💰","🛡️","✈️","🔧","🚗","📈","💵","🏠","🎓","👶","💊","🎯","🏖️","🏋️","📚"];
+const DEF_GOALS = [
+  {id:"g1",name:"Núdzový fond (3–6 mes.)",target:4912.72,monthly:50,current:20,rate:12,icon:"🛡️"},
+  {id:"g2",name:"Dovolenka 2026",target:1500,monthly:50,current:0,rate:8,icon:"✈️"},
+  {id:"g3",name:"Servis auta",target:1000,monthly:10,current:0,rate:8,icon:"🔧"},
+  {id:"g4",name:"CAR_pie",target:150000,monthly:80,current:229.80,rate:12,icon:"🚗"},
+  {id:"g5",name:"Dlhodobé investovanie",target:2000000,monthly:200,current:50333,rate:12,icon:"📈"},
+  {id:"g6",name:"Krátkodobé sporenie",target:800,monthly:50,current:0,rate:0,icon:"💵"},
+];
+
+// ── STORAGE ───────────────────────────────────────────────────────────────
+const ls = {
+  get:(k)=>{ try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch{return null;} },
+  set:(k,v)=>{ try{localStorage.setItem(k,JSON.stringify(v));}catch{} }
+};
+
+// ── HELPERS ───────────────────────────────────────────────────────────────
+const fmt=(n)=>Math.abs(n).toLocaleString("sk-SK",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
+const isInc=(tx)=>tx.type==="Príjem"||(tx.type==="Prevod"&&tx.direction==="in");
+const isExp=(tx)=>tx.type==="Výdavok"||(tx.type==="Prevod"&&tx.direction==="out");
+
+// ── MONEY INPUT with local state ──────────────────────────────────────────
+function MoneyInput({value,onSave,placeholder,style,className}){
+  const [v,setV]=useState(value===0||value===""?"":String(value));
+  const prev=useRef(value);
+  useEffect(()=>{ if(value!==prev.current){setV(value===0||value===""?"":String(value));prev.current=value;} },[value]);
+  const handleChange=(e)=>{
+    const raw=e.target.value.replace(",",".");
+    if(/^(\d*\.?\d{0,2})?$/.test(raw)) setV(raw);
+  };
+  const handleBlur=()=>{ const n=parseFloat(v)||0; onSave(n); prev.current=n; };
+  return <input className={className||"inp-sm"} type="text" inputMode="decimal" placeholder={placeholder||"0.00"} value={v} onChange={handleChange} onBlur={handleBlur} style={style}/>;
+}
+
+// ── MAIN APP ──────────────────────────────────────────────────────────────
+function App(){
+  const now=new Date();
+  const [txs,setTxs]=useState([]);
+  const [budgets,setBudgets]=useState(DEF_BUDGETS);
+  const [goals,setGoals]=useState(DEF_GOALS);
+  const [oaData,setOaData]=useState({});
+  const [contribs,setContribs]=useState({});
+  const [customCats,setCustomCats]=useState([]);
+  const [month,setMonth]=useState(now.getMonth()+1);
+  const [year,setYear]=useState(now.getFullYear());
+  const [tab,setTab]=useState("dashboard");
+  const [showTxModal,setShowTxModal]=useState(false);
+  const [loading,setLoading]=useState(true);
+  const [search,setSearch]=useState("");
+  const [editId,setEditId]=useState(null);
+  const [budgEdit,setBudgEdit]=useState({});
+  const [delConf,setDelConf]=useState(null);
+  const [newCat,setNewCat]=useState("");
+  const [form,setForm]=useState({date:now.toISOString().slice(0,10),desc:"",cat:"Potraviny nákup",type:"Výdavok",amount:"",dir:"out",note:""});
+
+  useEffect(()=>{
+    setTxs(ls.get("fin_txs")||[]);
+    setBudgets({...DEF_BUDGETS,...(ls.get("fin_budgets")||{})});
+    setGoals(ls.get("fin_goals")||DEF_GOALS);
+    setOaData(ls.get("fin_obedy")||{});
+    setContribs(ls.get("fin_contribs")||{});
+    setCustomCats(ls.get("fin_cats")||[]);
+    setLoading(false);
+  },[]);
+
+  const saveTxs=v=>{ls.set("fin_txs",v);setTxs(v)};
+  const saveBudgets=v=>{ls.set("fin_budgets",v);setBudgets(v)};
+  const saveGoals=v=>{ls.set("fin_goals",v);setGoals(v)};
+  const saveOa=v=>{ls.set("fin_obedy",v);setOaData(v)};
+  const saveContribs=v=>{ls.set("fin_contribs",v);setContribs(v)};
+  const saveCats=v=>{ls.set("fin_cats",v);setCustomCats(v)};
+
+  const allExpCats=useMemo(()=>[...EXP_CATS,...customCats],[customCats]);
+  const mTxs=useMemo(()=>txs.filter(tx=>tx.month===month&&tx.year===year),[txs,month,year]);
+  const income=useMemo(()=>mTxs.filter(isInc).reduce((s,tx)=>s+tx.amount,0),[mTxs]);
+  const expenses=useMemo(()=>mTxs.filter(isExp).reduce((s,tx)=>s+tx.amount,0),[mTxs]);
+  const savings=income-expenses;
+  const savRate=income>0?((savings/income)*100).toFixed(1):"0.0";
+  const totalBudget=Object.values(budgets).reduce((s,v)=>s+v,0);
+  const catSpend=useMemo(()=>{const m={};mTxs.filter(isExp).forEach(tx=>{m[tx.cat||tx.category]=(m[tx.cat||tx.category]||0)+tx.amount;});return m;},[mTxs]);
+  const pieData=useMemo(()=>Object.entries(catSpend).filter(([,v])=>v>0).sort(([,a],[,b])=>b-a).slice(0,10).map(([name,value])=>({name,value:+value.toFixed(2)})),[catSpend]);
+  const yrData=useMemo(()=>MONTHS.map((_,i)=>{const m=i+1,t=txs.filter(tx=>tx.month===m&&tx.year===year),inc=t.filter(isInc).reduce((s,tx)=>s+tx.amount,0),exp=t.filter(isExp).reduce((s,tx)=>s+tx.amount,0);return{name:MONTHS[i].slice(0,3),income:+inc.toFixed(2),expenses:+exp.toFixed(2),savings:+(inc-exp).toFixed(2)}}),[txs,year]);
+  const filtTxs=useMemo(()=>mTxs.filter(tx=>[tx.desc||tx.description,tx.cat||tx.category,tx.note||""].some(s=>(s||"").toLowerCase().includes(search.toLowerCase()))).sort((a,b)=>new Date(b.date)-new Date(a.date)),[mTxs,search]);
+
+  const resetForm=()=>{setForm({date:now.toISOString().slice(0,10),desc:"",cat:"Potraviny nákup",type:"Výdavok",amount:"",dir:"out",note:""});setEditId(null);};
+
+  const handleSubmit=()=>{
+    if(!form.desc.trim()||!form.amount||isNaN(parseFloat(form.amount)))return;
+    const d=new Date(form.date);
+    const tx={id:editId||`${Date.now()}_${Math.random().toString(36).slice(2)}`,date:form.date,desc:form.desc.trim(),cat:form.cat,type:form.type,amount:Math.abs(parseFloat(form.amount)),dir:form.dir,note:form.note.trim(),month:d.getMonth()+1,year:d.getFullYear()};
+    saveTxs(editId?txs.map(t=>t.id===editId?tx:t):[...txs,tx]);
+    setShowTxModal(false);resetForm();
+  };
+  const handleEdit=(tx)=>{setForm({date:tx.date,desc:tx.desc||tx.description,cat:tx.cat||tx.category,type:tx.type,amount:String(tx.amount),dir:tx.dir||tx.direction||"out",note:tx.note||""});setEditId(tx.id);setShowTxModal(true);};
+  const handleDel=id=>{saveTxs(txs.filter(t=>t.id!==id));setDelConf(null);};
+  const handleBudgSave=()=>{const u={...budgets};Object.keys(budgEdit).forEach(k=>{u[k]=parseFloat(budgEdit[k])||0;});saveBudgets(u);setBudgEdit({});};
+  const handleAddCat=()=>{if(!newCat.trim()||allExpCats.includes(newCat.trim()))return;saveCats([...customCats,newCat.trim()]);setNewCat("");};
+
+  if(loading) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",color:"#10b981",fontSize:16}}>Načítavam...</div>;
+
+  const catOpts=form.type==="Príjem"?INC_CATS:allExpCats;
+
+  return (
+    <div>
+      {/* HEADER */}
+      <div style={{background:"#0a0f1f",borderBottom:"1px solid #1a2540",padding:"13px 18px",position:"sticky",top:0,zIndex:40}}>
+        <div style={{maxWidth:980,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+          <div><div style={{fontSize:17,fontWeight:800,color:"#10b981",letterSpacing:"-.5px"}}>💰 FinanceTracker</div><div style={{fontSize:11,color:"#334155",marginTop:1}}>Osobné financie — {MONTHS[month-1]} {year}</div></div>
+          <div style={{display:"flex",gap:7}}>
+            <select className="inp" style={{width:"auto",padding:"6px 10px",fontSize:13}} value={month} onChange={e=>setMonth(+e.target.value)}>{MONTHS.map((m,i)=><option key={i} value={i+1}>{m}</option>)}</select>
+            <select className="inp" style={{width:"auto",padding:"6px 10px",fontSize:13}} value={year} onChange={e=>setYear(+e.target.value)}>{[2024,2025,2026,2027].map(y=><option key={y}>{y}</option>)}</select>
+          </div>
+        </div>
+      </div>
+      {/* TABS */}
+      <div style={{background:"#0a0f1f",borderBottom:"1px solid #1a2540",padding:"5px 18px"}}>
+        <div style={{maxWidth:980,margin:"0 auto",display:"flex",gap:3,overflowX:"auto",paddingBottom:2}}>
+          {[["dashboard","📊 Dashboard"],["transactions","📝 Transakcie"],["obedy","🍽️ Obedy"],["budget","🎯 Rozpočet"],["sporenie","💰 Sporenie"],["yearly","📅 Ročný"]].map(([id,lbl])=>(
+            <button key={id} className={`tab ${tab===id?"on":""}`} onClick={()=>setTab(id)}>{lbl}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{maxWidth:980,margin:"0 auto",padding:"20px 14px 100px"}}>
+        {/* ═ DASHBOARD ═ */}
+        {tab==="dashboard"&&<DashTab income={income} expenses={expenses} savings={savings} savRate={savRate} totalBudget={totalBudget} budgets={budgets} pieData={pieData} catSpend={catSpend} filtTxs={filtTxs} onEdit={handleEdit} onDel={id=>setDelConf(id)} onAll={()=>setTab("transactions")}/>}
+
+        {/* ═ TRANSAKCIE ═ */}
+        {tab==="transactions"&&(
+          <div className="card" style={{overflow:"hidden"}}>
+            <div style={{padding:"13px 16px",borderBottom:"1px solid #1a2540",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+              <input className="inp" placeholder="🔍 Hľadaj..." value={search} onChange={e=>setSearch(e.target.value)} style={{maxWidth:280}}/>
+              <span style={{fontSize:12,color:"#475569"}}>{filtTxs.length} transakcií · {fmt(expenses)} výdavkov</span>
+            </div>
+            {filtTxs.length===0?<div style={{padding:44,textAlign:"center",color:"#334155",fontSize:13}}>{search?"Žiadne výsledky":"Žiadne transakcie tento mesiac"}</div>:filtTxs.map(tx=><TxRow key={tx.id} tx={tx} onEdit={handleEdit} onDel={id=>setDelConf(id)}/>)}
+          </div>
+        )}
+
+        {/* ═ OBEDY ═ */}
+        {tab==="obedy"&&<ObedyTab month={month} year={year} oaData={oaData} saveOa={saveOa}/>}
+
+        {/* ═ ROZPOČET ═ */}
+        {tab==="budget"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div><div style={{fontWeight:700,fontSize:15}}>Limity kategórií</div><div style={{fontSize:12,color:"#475569",marginTop:2}}>Mesačné limity v €</div></div>
+              <button className="btn" onClick={handleBudgSave}>Uložiť zmeny</button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(265px,1fr))",gap:10}}>
+              {allExpCats.map(cat=>{const limit=budgets[cat]||0,actual=catSpend[cat]||0,pct=limit>0?Math.min(100,(actual/limit)*100):0,over=actual>limit&&limit>0;return(
+                <div key={cat} className="card" style={{padding:"13px 15px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
+                    <span style={{fontSize:12,color:"#94a3b8",maxWidth:"55%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cat}</span>
+                    <div style={{display:"flex",alignItems:"center",gap:5}}>
+                      <span className="mono" style={{fontSize:11,color:over?"#ef4444":"#64748b"}}>{fmt(actual)}</span>
+                      <span style={{color:"#253556",fontSize:11}}>/</span>
+                      <MoneyInput value={budgEdit[cat]!==undefined?budgEdit[cat]:(budgets[cat]||0)} onSave={v=>setBudgEdit(p=>({...p,[cat]:v}))} style={{width:68}}/>
+                      <span style={{fontSize:11,color:"#334155"}}>€</span>
+                    </div>
+                  </div>
+                  {limit>0&&<div className="pbar"><div className="pfill" style={{width:`${pct}%`,background:over?"#ef4444":pct>80?"#f59e0b":"#10b981"}}/></div>}
+                  {over&&<div style={{fontSize:10,color:"#ef4444",marginTop:3}}>🔴 Prekročený o {fmt(actual-limit)}</div>}
+                  {limit===0&&actual>0&&<div style={{fontSize:10,color:"#f59e0b",marginTop:3}}>⚠ Bez limitu · {fmt(actual)}</div>}
+                </div>
+              );})}
+            </div>
+            <div className="card" style={{padding:16}}>
+              <div className="stit">Pridať vlastnú kategóriu</div>
+              <div style={{display:"flex",gap:10}}><input className="inp" placeholder="Názov kategórie..." value={newCat} onChange={e=>setNewCat(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleAddCat()}/><button className="btn" onClick={handleAddCat} style={{whiteSpace:"nowrap"}}>Pridať</button></div>
+            </div>
+          </div>
+        )}
+
+        {/* ═ SPORENIE ═ */}
+        {tab==="sporenie"&&<SporTab goals={goals} saveGoals={saveGoals} contribs={contribs} saveContribs={saveContribs} year={year} txs={txs}/>}
+
+        {/* ═ ROČNÝ ═ */}
+        {tab==="yearly"&&<YearTab yrData={yrData} year={year} txs={txs} month={month} setMonth={m=>{setMonth(m);setTab("dashboard");}}/>}
+      </div>
+
+      <button className="fab" onClick={()=>{resetForm();setShowTxModal(true);}}>+</button>
+
+      {/* TX MODAL */}
+      {showTxModal&&(
+        <div className="ov" onClick={e=>{if(e.target===e.currentTarget){setShowTxModal(false);resetForm();}}}>
+          <div className="modal">
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+              <div style={{fontWeight:800,fontSize:17}}>{editId?"✏️ Upraviť":"➕ Nová transakcia"}</div>
+              <button className="ibtn" onClick={()=>{setShowTxModal(false);resetForm();}} style={{fontSize:20,color:"#64748b"}}>×</button>
+            </div>
+            <div style={{display:"flex",gap:7,marginBottom:16}}>
+              {["Výdavok","Príjem","Prevod"].map(t=>(
+                <button key={t} className="tbtn" onClick={()=>setForm(f=>({...f,type:t,cat:t==="Príjem"?INC_CATS[0]:f.cat}))}
+                  style={{background:form.type===t?(t==="Výdavok"?"#ef4444":t==="Príjem"?"#10b981":"#3b82f6"):"#131f35",borderColor:form.type===t?"transparent":"#253556",color:form.type===t?"#fff":"#64748b"}}>{t}</button>
+              ))}
+            </div>
+            {form.type==="Prevod"&&(
+              <div style={{display:"flex",gap:7,marginBottom:14}}>
+                {[["in","📥 Prichádzajúci"],["out","📤 Odchádzajúci"]].map(([v,l])=>(
+                  <button key={v} onClick={()=>setForm(f=>({...f,dir:v}))} style={{flex:1,padding:"7px 4px",borderRadius:8,border:"1px solid",cursor:"pointer",fontSize:13,fontFamily:"inherit",background:form.dir===v?"#253556":"#131f35",borderColor:form.dir===v?"#3b82f6":"#253556",color:form.dir===v?"#e2e8f0":"#64748b"}}>{l}</button>
+                ))}
+              </div>
+            )}
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              {[["DÁTUM","date","date"],["POPIS *","desc","text"],["SUMA (€) *","amount","text"]].map(([lbl,fld,tp])=>(
+                <div key={fld}><label style={{fontSize:11,color:"#475569",display:"block",marginBottom:5,fontWeight:600,letterSpacing:".5px"}}>{lbl}</label>
+                  {tp==="text"&&fld==="amount"?
+                    <MoneyInput value={form.amount} onSave={v=>setForm(f=>({...f,amount:String(v)}))} className="inp mono" style={{width:"100%",padding:"10px 14px",borderRadius:8,border:"1px solid #253556",fontSize:14}} placeholder="0.00"/>:
+                    <input type={tp} className={`inp${fld==="amount"?" mono":""}`} placeholder={fld==="desc"?"Napr. Lidl nákup, Výplata...":undefined} value={form[fld]} onChange={e=>setForm(f=>({...f,[fld]:e.target.value}))}/>
+                  }
+                </div>
+              ))}
+              <div><label style={{fontSize:11,color:"#475569",display:"block",marginBottom:5,fontWeight:600,letterSpacing:".5px"}}>KATEGÓRIA</label><select className="inp" value={form.cat} onChange={e=>setForm(f=>({...f,cat:e.target.value}))}>{catOpts.map(c=><option key={c}>{c}</option>)}</select></div>
+              <div><label style={{fontSize:11,color:"#475569",display:"block",marginBottom:5,fontWeight:600,letterSpacing:".5px"}}>POZNÁMKA</label><input type="text" className="inp" placeholder="Voliteľná..." value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))}/></div>
+            </div>
+            <div style={{display:"flex",gap:10,marginTop:20}}>
+              <button className="btn-g" style={{flex:1}} onClick={()=>{setShowTxModal(false);resetForm();}}>Zrušiť</button>
+              <button className="btn" style={{flex:2,fontSize:15}} onClick={handleSubmit}>{editId?"Uložiť zmeny":"Pridať transakciu"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRM */}
+      {delConf&&(
+        <div className="ov" onClick={()=>setDelConf(null)}>
+          <div className="modal" style={{maxWidth:340}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontWeight:700,fontSize:16,marginBottom:8}}>🗑️ Zmazať transakciu?</div>
+            <div style={{fontSize:13,color:"#64748b",marginBottom:20}}>Táto akcia je nevratná.</div>
+            <div style={{display:"flex",gap:10}}>
+              <button className="btn-g" style={{flex:1}} onClick={()=>setDelConf(null)}>Zrušiť</button>
+              <button style={{flex:1,background:"#ef4444",color:"#fff",border:"none",borderRadius:8,padding:"10px 16px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:14}} onClick={()=>handleDel(delConf)}>Zmazať</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────
+function DashTab({income,expenses,savings,savRate,totalBudget,budgets,pieData,catSpend,filtTxs,onEdit,onDel,onAll}){
+  const pct=totalBudget>0?Math.min(100,(expenses/totalBudget)*100):0;
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(165px,1fr))",gap:11}}>
+        {[{l:"Príjem",v:income,c:"#10b981",i:"💶"},{l:"Výdavky",v:expenses,c:"#ef4444",i:"💸"},{l:"Úspora",v:savings,c:savings>=0?"#10b981":"#ef4444",i:"✅"},{l:"Miera úspory",v:`${savRate} %`,c:"#f59e0b",i:"📈",raw:true}].map(({l,v,c,i,raw})=>(
+          <div key={l} className="card" style={{padding:"16px 18px"}}>
+            <div style={{fontSize:11,color:"#475569",marginBottom:5}}>{i} {l}</div>
+            <div className="mono" style={{fontSize:20,fontWeight:700,color:c}}>{raw?v:fmt(v)}</div>
+          </div>
+        ))}
+      </div>
+      <div className="card" style={{padding:"14px 18px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
+          <span style={{fontSize:13,fontWeight:600}}>Mesačný rozpočet</span>
+          <span className="mono" style={{fontSize:12,color:expenses>totalBudget?"#ef4444":"#64748b"}}>{fmt(expenses)} / {fmt(totalBudget)}</span>
+        </div>
+        <div className="pbar"><div className="pfill" style={{width:`${pct}%`,background:expenses>totalBudget?"#ef4444":pct>80?"#f59e0b":"#10b981"}}/></div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+        <div className="card" style={{padding:"16px 18px"}}>
+          <div className="stit">Top kategórie</div>
+          {pieData.length===0?<div style={{color:"#334155",textAlign:"center",padding:"24px 0",fontSize:13}}>Žiadne výdavky</div>:pieData.slice(0,7).map(({name,value},i)=>{const limit=budgets[name]||0,p=limit>0?Math.min(100,(value/limit)*100):0;return(
+            <div key={name} style={{marginBottom:11}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                <span style={{fontSize:12,color:"#94a3b8",maxWidth:"58%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</span>
+                <span className="mono" style={{fontSize:12,color:limit>0&&value>limit?"#ef4444":PCOLS[i%PCOLS.length],fontWeight:600}}>{fmt(value)}</span>
+              </div>
+              {limit>0&&<div className="pbar"><div className="pfill" style={{width:`${p}%`,background:value>limit?"#ef4444":p>80?"#f59e0b":PCOLS[i%PCOLS.length]}}/></div>}
+            </div>
+          );})}
+        </div>
+        <div className="card" style={{padding:"16px 18px"}}>
+          <div className="stit">Rozdelenie výdavkov</div>
+          {pieData.length>0&&RC.PieChart?(
+            <ResponsiveContainer width="100%" height={190}>
+              <PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={48} outerRadius={76} dataKey="value" paddingAngle={2}>{pieData.map((_,i)=><Cell key={i} fill={PCOLS[i%PCOLS.length]}/>)}</Pie><Tooltip contentStyle={{background:"#131f35",border:"1px solid #253556",borderRadius:8,fontSize:12}} formatter={v=>[fmt(v),""]}/></PieChart>
+            </ResponsiveContainer>
+          ):<SimplePie data={pieData}/>}
+        </div>
+      </div>
+      <div className="card" style={{overflow:"hidden"}}>
+        <div style={{padding:"13px 16px",fontWeight:600,fontSize:13,borderBottom:"1px solid #1a2540",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span>Posledné transakcie</span>
+          {filtTxs.length>5&&<button className="btn-g" style={{padding:"4px 11px",fontSize:12}} onClick={onAll}>Všetky →</button>}
+        </div>
+        {filtTxs.length===0?<div style={{padding:32,textAlign:"center",color:"#334155",fontSize:13}}>Žiadne transakcie — pridaj prvú tlačidlom +</div>:filtTxs.slice(0,6).map(tx=><TxRow key={tx.id} tx={tx} onEdit={onEdit} onDel={onDel}/>)}
+      </div>
+    </div>
+  );
+}
+
+// ── SIMPLE PIE FALLBACK ────────────────────────────────────────────────────
+function SimplePie({data}){
+  if(!data||data.length===0) return <div style={{color:"#334155",textAlign:"center",padding:"56px 0",fontSize:13}}>Žiadne dáta</div>;
+  const total=data.reduce((s,d)=>s+d.value,0);
+  let angle=0;
+  const paths=data.map((d,i)=>{
+    const pct=d.value/total,a=pct*360,start=angle,end=angle+a;
+    angle+=a;
+    const r=75,cx=95,cy=95;
+    const toRad=deg=>deg*Math.PI/180;
+    const x1=cx+r*Math.sin(toRad(start)),y1=cy-r*Math.cos(toRad(start));
+    const x2=cx+r*Math.sin(toRad(end)),y2=cy-r*Math.cos(toRad(end));
+    const lg=a>180?1:0;
+    return <path key={i} d={`M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${lg},1 ${x2},${y2} Z`} fill={PCOLS[i%PCOLS.length]} opacity={.9}/>;
+  });
+  return <svg viewBox="0 0 190 190" style={{width:"100%",maxHeight:190}}>{paths}<circle cx={95} cy={95} r={48} fill="#0d1526"/></svg>;
+}
+
+// ── TX ROW ─────────────────────────────────────────────────────────────────
+function TxRow({tx,onEdit,onDel}){
+  const inc=isInc(tx),c=inc?"#10b981":"#ef4444";
+  const tc={Príjem:"#10b981",Prevod:"#3b82f6",Výdavok:"#ef4444"}[tx.type];
+  const desc=tx.desc||tx.description||"";
+  const cat=tx.cat||tx.category||"";
+  const dir=tx.dir||tx.direction||"out";
+  return(
+    <div className="txrow">
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13,fontWeight:600,color:"#e2e8f0",marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{desc}</div>
+        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+          <span style={{fontSize:11,color:"#475569"}}>{tx.date}</span>
+          <span className="bdg" style={{background:tc+"22",color:tc}}>{tx.type}{tx.type==="Prevod"?(dir==="in"?" ↓":" ↑"):""}</span>
+          <span style={{fontSize:11,color:"#475569",maxWidth:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cat}</span>
+          {tx.note&&<span style={{fontSize:11,color:"#334155"}}>· {tx.note}</span>}
+        </div>
+      </div>
+      <div className="mono" style={{fontSize:14,fontWeight:700,color:c,whiteSpace:"nowrap"}}>{inc?"+":"−"} {tx.amount.toLocaleString("sk-SK",{minimumFractionDigits:2,maximumFractionDigits:2})} €</div>
+      <div style={{display:"flex",gap:2,flexShrink:0}}>
+        <button className="ibtn" onClick={()=>onEdit(tx)}>✏️</button>
+        <button className="ibtn" onClick={()=>onDel(tx.id)}>🗑️</button>
+      </div>
+    </div>
+  );
+}
+
+// ── OBEDY TAB ──────────────────────────────────────────────────────────────
+function ObedyTab({month,year,oaData,saveOa}){
+  const key=`${year}-${month}`;
+  const md=oaData[key]||{dailyRate:7.28,days:{}};
+  const [editRate,setEditRate]=useState(false);
+  const [rateVal,setRateVal]=useState(String(md.dailyRate));
+
+  useEffect(()=>setRateVal(String((oaData[key]||{dailyRate:7.28}).dailyRate)),[key,JSON.stringify(oaData[key])]);
+
+  const dim=new Date(year,month,0).getDate();
+  const getDOW=d=>new Date(year,month-1,d).getDay();
+  const isWknd=d=>{const dw=getDOW(d);return dw===0||dw===6;};
+
+  const getDayData=d=>{
+    const s=md.days[String(d)];
+    if(s) return s;
+    return {dayOff:isWknd(d),spent:0};
+  };
+
+  const updateDay=useCallback((d,patch)=>{
+    const prev=getDayData(d);
+    const upd={...oaData,[key]:{...md,days:{...md.days,[String(d)]:{...prev,...patch}}}};
+    saveOa(upd);
+  },[oaData,key,md]);
+
+  const saveRate=()=>{const r=parseFloat(rateVal)||7.28;saveOa({...oaData,[key]:{...md,dailyRate:r}});setEditRate(false);};
+
+  const rows=Array.from({length:dim},(_,i)=>i+1).map(d=>{
+    const dd=getDayData(d);const wknd=isWknd(d);const dayOff=dd.dayOff??wknd;
+    const narok=dayOff?0:md.dailyRate;const spent=parseFloat(dd.spent)||0;
+    return {d,dayOff,wknd,narok,spent,rozdiel:narok-spent,dn:DNAMES[getDOW(d)]};
+  });
+
+  const weeks=[];let wk=[];
+  for(const row of rows){wk.push(row);if(getDOW(row.d)===0||row.d===dim){weeks.push(wk);wk=[];}}
+  if(wk.length>0) weeks.push(wk);
+
+  const totN=rows.reduce((s,r)=>s+r.narok,0);
+  const totS=rows.reduce((s,r)=>s+r.spent,0);
+  const totR=totN-totS;
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:11}}>
+        {[{l:"Celkový nárok",v:totN,c:"#3b82f6",i:"📋"},{l:"Reálne minuté",v:totS,c:"#ef4444",i:"💳"},{l:"Úspora na obedoch",v:totR,c:totR>=0?"#10b981":"#ef4444",i:"✅"}].map(({l,v,c,i})=>(
+          <div key={l} className="card" style={{padding:"14px 16px"}}>
+            <div style={{fontSize:11,color:"#475569",marginBottom:5}}>{i} {l}</div>
+            <div className="mono" style={{fontSize:18,fontWeight:700,color:c}}>{fmt(v)}</div>
+          </div>
+        ))}
+        <div className="card" style={{padding:"14px 16px"}}>
+          <div style={{fontSize:11,color:"#475569",marginBottom:5}}>⚙️ Denná sadzba</div>
+          {editRate?(
+            <div style={{display:"flex",gap:6,alignItems:"center"}}>
+              <MoneyInput value={parseFloat(rateVal)||7.28} onSave={v=>{setRateVal(String(v));}} className="inp-sm" style={{width:70}}/>
+              <button className="btn-sm" onClick={saveRate}>✓</button>
+            </div>
+          ):(
+            <div style={{display:"flex",alignItems:"center",gap:7}}>
+              <div className="mono" style={{fontSize:18,fontWeight:700,color:"#f59e0b"}}>{md.dailyRate.toFixed(2)} €</div>
+              <button className="ibtn" style={{fontSize:13}} onClick={()=>{setRateVal(String(md.dailyRate));setEditRate(true);}}>✏️</button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="card" style={{overflow:"hidden"}}>
+        <div style={{padding:"13px 16px",borderBottom:"1px solid #1a2540",fontWeight:600,fontSize:13,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span>🍽️ {MONTHS[month-1]} {year}</span>
+          <span style={{fontSize:11,color:"#475569"}}>{rows.filter(r=>!r.dayOff).length} pracovných dní</span>
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead><tr style={{borderBottom:"1px solid #1a2540"}}>
+              {["#","Deň","Typ","Nárok (€)","Zaplatené (€)","Rozdiel (€)"].map((h,i)=>(
+                <th key={i} style={{padding:"9px 12px",textAlign:i>=3?"right":"left",color:"#475569",fontWeight:600,fontSize:10,letterSpacing:".5px",textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {weeks.map((wk,wi)=>{
+                const wN=wk.reduce((s,r)=>s+r.narok,0),wS=wk.reduce((s,r)=>s+r.spent,0),wR=wN-wS;
+                return <tbody key={wi}>
+                  {wk.map(row=>{
+                    const wknd=row.wknd;
+                    return(
+                      <tr key={row.d} className="drow" style={{background:wknd?"#080e1c":row.dayOff?"#0b1422":"transparent",opacity:wknd?.5:1}}>
+                        <td style={{padding:"8px 12px",color:"#64748b",fontWeight:600,width:36}}>{row.d}</td>
+                        <td style={{padding:"8px 6px",color:"#475569",fontSize:11,width:30}}>{row.dn}</td>
+                        <td style={{padding:"8px 12px"}}>
+                          {wknd?<span style={{fontSize:11,color:"#253556",fontStyle:"italic"}}>{getDOW(row.d)===0?"Nedeľa":"Sobota"}</span>:(
+                            <button onClick={()=>updateDay(row.d,{dayOff:!row.dayOff,spent:row.spent})}
+                              style={{padding:"3px 11px",borderRadius:20,border:"1px solid",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",background:row.dayOff?"#1a2540":"#062015",borderColor:row.dayOff?"#334155":"#10b981",color:row.dayOff?"#64748b":"#10b981",transition:"all .15s"}}>
+                              {row.dayOff?"🏖 Dovolenka":"✓ Práca"}</button>
+                          )}
+                        </td>
+                        <td className="mono" style={{padding:"8px 12px",textAlign:"right",color:row.narok>0?"#3b82f6":"#253556",fontWeight:600}}>{row.narok>0?row.narok.toFixed(2)+" €":"—"}</td>
+                        <td style={{padding:"8px 12px",textAlign:"right"}}>
+                          {!row.dayOff&&!wknd?(
+                            <DayCell value={row.spent} onSave={v=>updateDay(row.d,{dayOff:false,spent:v})}/>
+                          ):<span style={{color:"#253556"}}>—</span>}
+                        </td>
+                        <td className="mono" style={{padding:"8px 12px",textAlign:"right",fontWeight:700,color:!row.dayOff&&!wknd?(row.rozdiel>0?"#10b981":row.rozdiel<0?"#ef4444":"#475569"):"#253556"}}>
+                          {!row.dayOff&&!wknd?((row.rozdiel>=0?"+":"")+row.rozdiel.toFixed(2)+" €"):"—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {wN>0&&<tr style={{background:"#091220",borderBottom:"2px solid #1a2540"}}>
+                    <td colSpan={3} style={{padding:"6px 12px",fontSize:10,color:"#475569",fontWeight:700,letterSpacing:".5px"}}>📊 TÝŽDEŇ {wi+1}</td>
+                    <td className="mono" style={{padding:"6px 12px",textAlign:"right",color:"#3b82f6",fontSize:12,fontWeight:700}}>{wN.toFixed(2)} €</td>
+                    <td className="mono" style={{padding:"6px 12px",textAlign:"right",color:"#e2e8f0",fontSize:12,fontWeight:700}}>{wS.toFixed(2)} €</td>
+                    <td className="mono" style={{padding:"6px 12px",textAlign:"right",fontSize:12,fontWeight:700,color:wR>=0?"#10b981":"#ef4444"}}>{wR>=0?"+":""}{wR.toFixed(2)} €</td>
+                  </tr>}
+                </tbody>;
+              })}
+            </tbody>
+            <tfoot><tr style={{background:"#0a0f1f",borderTop:"2px solid #253556"}}>
+              <td colSpan={3} style={{padding:"11px 12px",fontWeight:800,fontSize:11,color:"#94a3b8",letterSpacing:".5px"}}>MESAČNÝ SÚČET</td>
+              <td className="mono" style={{padding:"11px 12px",textAlign:"right",color:"#3b82f6",fontWeight:800}}>{totN.toFixed(2)} €</td>
+              <td className="mono" style={{padding:"11px 12px",textAlign:"right",color:"#e2e8f0",fontWeight:800}}>{totS.toFixed(2)} €</td>
+              <td className="mono" style={{padding:"11px 12px",textAlign:"right",fontWeight:800,color:totR>=0?"#10b981":"#ef4444"}}>{totR>=0?"+":""}{totR.toFixed(2)} €</td>
+            </tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Day cell: fully local state, saves only on blur – no lag!
+function DayCell({value,onSave}){
+  const [v,setV]=useState(value===0?"":String(value));
+  const prev=useRef(value);
+  useEffect(()=>{if(value!==prev.current){setV(value===0?"":String(value));prev.current=value;}},[value]);
+  const handleChange=e=>{const raw=e.target.value.replace(",",".");if(/^(\d*\.?\d{0,2})?$/.test(raw))setV(raw);};
+  const handleBlur=()=>{const n=parseFloat(v)||0;onSave(n);prev.current=n;};
+  return(
+    <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:4}}>
+      <input type="text" inputMode="decimal" className="inp-sm" value={v} onChange={handleChange} onBlur={handleBlur} placeholder="0.00"/>
+      <span style={{fontSize:11,color:"#334155"}}>€</span>
+    </div>
+  );
+}
+
+// ── SPORENIE TAB ───────────────────────────────────────────────────────────
+function SporTab({goals,saveGoals,contribs,saveContribs,year,txs}){
+  const [showModal,setShowModal]=useState(false);
+  const [editGid,setEditGid]=useState(null);
+  const [gf,setGf]=useState({name:"",target:"",monthly:"",current:"",rate:"",icon:"💰"});
+
+  const openAdd=()=>{setGf({name:"",target:"",monthly:"",current:"",rate:"",icon:"💰"});setEditGid(null);setShowModal(true);};
+  const openEdit=g=>{setGf({name:g.name,target:String(g.target),monthly:String(g.monthly),current:String(g.current),rate:String(g.rate),icon:g.icon});setEditGid(g.id);setShowModal(true);};
+  const handleSave=()=>{
+    if(!gf.name.trim()||!gf.target)return;
+    const g={id:editGid||`g_${Date.now()}`,name:gf.name.trim(),target:parseFloat(gf.target)||0,monthly:parseFloat(gf.monthly)||0,current:parseFloat(gf.current)||0,rate:parseFloat(gf.rate)||0,icon:gf.icon};
+    saveGoals(editGid?goals.map(x=>x.id===editGid?g:x):[...goals,g]);
+    setShowModal(false);
+  };
+  const handleDelG=id=>saveGoals(goals.filter(g=>g.id!==id));
+  const updateCurrent=(id,val)=>saveGoals(goals.map(g=>g.id===id?{...g,current:parseFloat(val)||0}:g));
+
+  // Monthly income per month from transactions
+  const getMonthIncome=m=>txs.filter(tx=>tx.month===m&&tx.year===year&&isInc(tx)).reduce((s,tx)=>s+tx.amount,0);
+
+  // Contributions: contribs[year][month][goalId] = amount
+  const yrContribs=contribs[String(year)]||{};
+  const getContrib=(m,gid)=>parseFloat((yrContribs[String(m)]||{})[gid])||0;
+  const setContrib=(m,gid,val)=>{
+    const upd={...contribs,[String(year)]:{...yrContribs,[String(m)]:{...(yrContribs[String(m)]||{}),[gid]:val}}};
+    saveContribs(upd);
+  };
+
+  // Total contributed per goal (all months this year)
+  const goalYearTotal=gid=>Array.from({length:12},(_,i)=>getContrib(i+1,gid)).reduce((s,v)=>s+v,0);
+
+  const getMonthsLeft=g=>{
+    if(g.monthly<=0)return null;
+    const rem=g.target-g.current;if(rem<=0)return 0;
+    if(g.rate===0)return Math.ceil(rem/g.monthly);
+    const r=(g.rate/100)/12;let n=0,acc=g.current;
+    while(acc<g.target&&n<1200){acc=acc*(1+r)+g.monthly;n++;}return n<1200?n:null;
+  };
+
+  const totalTarget=goals.reduce((s,g)=>s+g.target,0);
+  const totalCurrent=goals.reduce((s,g)=>s+g.current,0);
+  const totalMonthly=goals.reduce((s,g)=>s+g.monthly,0);
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {/* KPIs */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))",gap:11}}>
+        {[{l:"Celkový cieľ",v:totalTarget,c:"#3b82f6",i:"🎯"},{l:"Nasporené",v:totalCurrent,c:"#10b981",i:"💰"},{l:"Mesačne",v:totalMonthly,c:"#f59e0b",i:"📅"},{l:"Pokrok",v:`${totalTarget>0?((totalCurrent/totalTarget)*100).toFixed(1):0} %`,c:"#a855f7",i:"📊",raw:true}].map(({l,v,c,i,raw})=>(
+          <div key={l} className="card" style={{padding:"14px 16px"}}>
+            <div style={{fontSize:11,color:"#475569",marginBottom:5}}>{i} {l}</div>
+            <div className="mono" style={{fontSize:18,fontWeight:700,color:c}}>{raw?v:fmt(v)}</div>
+          </div>
+        ))}
+      </div>
+      <div className="card" style={{padding:"14px 18px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:9}}>
+          <span style={{fontWeight:600,fontSize:13}}>Celkový pokrok</span>
+          <span className="mono" style={{fontSize:12,color:"#64748b"}}>{fmt(totalCurrent)} / {fmt(totalTarget)}</span>
+        </div>
+        <div className="pbar" style={{height:9}}><div className="pfill" style={{width:`${Math.min(100,totalTarget>0?(totalCurrent/totalTarget)*100:0)}%`,background:"linear-gradient(90deg,#10b981,#3b82f6)"}}/></div>
+      </div>
+
+      {/* Goals */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{fontWeight:700,fontSize:15}}>Ciele sporenia & investovania</div>
+        <button className="btn" onClick={openAdd}>+ Nový cieľ</button>
+      </div>
+
+      {goals.map((g,i)=>{
+        const pct=g.target>0?Math.min(100,(g.current/g.target)*100):0;
+        const ml=getMonthsLeft(g),color=GCOLS[i%GCOLS.length],done=g.current>=g.target;
+        return(
+          <div key={g.id} className="card" style={{padding:"18px 20px",borderLeft:`3px solid ${color}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+              <div style={{display:"flex",gap:9,alignItems:"center"}}>
+                <span style={{fontSize:20}}>{g.icon}</span>
+                <div>
+                  <div style={{fontWeight:700,fontSize:14,color:"#e2e8f0"}}>{g.name}</div>
+                  <div style={{fontSize:11,color:"#475569",marginTop:3,display:"flex",gap:5,flexWrap:"wrap"}}>
+                    {g.monthly>0&&<span style={{background:"#0d2538",color:"#3b82f6",padding:"2px 7px",borderRadius:20,fontWeight:600}}>+{g.monthly.toFixed(2)} €/mes</span>}
+                    {g.rate>0&&<span style={{background:"#1a1a3a",color:"#a855f7",padding:"2px 7px",borderRadius:20,fontWeight:600}}>{g.rate}% p.a.</span>}
+                    {done?<span style={{color:"#10b981",fontWeight:700}}>✅ Splnený!</span>:ml?<span>{ml<12?`${ml} mes.`:`${(ml/12).toFixed(1)} rok.`} do cieľa</span>:<span style={{color:"#475569"}}>bez termínu</span>}
+                  </div>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:3}}>
+                <button className="ibtn" onClick={()=>openEdit(g)} style={{fontSize:13}}>✏️</button>
+                <button className="ibtn" onClick={()=>handleDelG(g.id)} style={{fontSize:13}}>🗑️</button>
+              </div>
+            </div>
+            <div className="pbar" style={{height:7,marginBottom:11}}><div className="pfill" style={{width:`${pct}%`,background:done?"#10b981":color}}/></div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(105px,1fr))",gap:7}}>
+              {[{lbl:"Aktuálne",val:g.current,c:"#10b981",editable:true,id:g.id},{lbl:"Cieľ",val:g.target,c:color},{lbl:"Zostatok",val:Math.max(0,g.target-g.current),c:"#64748b"},{lbl:"Pokrok",val:`${pct.toFixed(1)} %`,c:done?"#10b981":color,raw:true}].map(({lbl,val,c,editable,id,raw})=>(
+                <div key={lbl} style={{background:"#0a1220",borderRadius:8,padding:"9px 11px"}}>
+                  <div style={{fontSize:9,color:"#475569",marginBottom:3,letterSpacing:".5px",fontWeight:600,textTransform:"uppercase"}}>{lbl}</div>
+                  {editable?(
+                    <div style={{display:"flex",alignItems:"center",gap:3}}>
+                      <MoneyInput value={val} onSave={v=>updateCurrent(id,v)} className="inp-sm" style={{width:"100%",color:c,fontWeight:700,fontSize:13,textAlign:"left"}}/>
+                      <span style={{fontSize:11,color:"#334155",flexShrink:0}}>€</span>
+                    </div>
+                  ):<div className="mono" style={{fontSize:13,fontWeight:700,color:c}}>{raw?val:fmt(val)}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* ═ MONTHLY CONTRIBUTIONS TABLE ═ */}
+      <div className="card" style={{overflow:"hidden"}}>
+        <div style={{padding:"13px 16px",borderBottom:"1px solid #1a2540",fontWeight:600,fontSize:13}}>
+          📊 Mesačné príspevky {year}
+          <span style={{fontSize:11,color:"#475569",fontWeight:400,marginLeft:10}}>— zadaj koľko si prispel tento mesiac do každého cieľa</span>
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table className="ctbl">
+            <thead>
+              <tr>
+                <th style={{textAlign:"left",minWidth:80}}>Mesiac</th>
+                <th style={{minWidth:70,color:"#64748b"}}>Príjem</th>
+                {goals.map((g,i)=><th key={g.id} style={{minWidth:90,color:GCOLS[i%GCOLS.length]}}>{g.icon} {g.name.split(" ")[0]}</th>)}
+                <th style={{minWidth:80}}>Spolu €</th>
+                <th style={{minWidth:70}}>% príjmu</th>
+              </tr>
+            </thead>
+            <tbody>
+              {MONTHS.map((mName,mi)=>{
+                const m=mi+1;
+                const inc=getMonthIncome(m);
+                const mContribs=goals.map(g=>getContrib(m,g.id));
+                const mTotal=mContribs.reduce((s,v)=>s+v,0);
+                const pct=inc>0?((mTotal/inc)*100).toFixed(1):"—";
+                const hasData=inc>0||mTotal>0;
+                return(
+                  <tr key={m} style={{background:mi%2===0?"#080e18":"transparent"}}>
+                    <td style={{color:"#94a3b8",fontWeight:500,padding:"7px 10px"}}>{mName}</td>
+                    <td className="mono" style={{color:inc>0?"#10b981":"#253556",padding:"7px 10px"}}>{inc>0?fmt(inc):"—"}</td>
+                    {goals.map((g,i)=>(
+                      <td key={g.id} style={{padding:"5px 8px"}}>
+                        <ContribCell value={getContrib(m,g.id)} onSave={v=>setContrib(m,g.id,v)} color={GCOLS[i%GCOLS.length]}/>
+                      </td>
+                    ))}
+                    <td className="mono" style={{color:mTotal>0?"#10b981":"#253556",fontWeight:700,padding:"7px 10px"}}>{mTotal>0?mTotal.toFixed(2)+" €":"—"}</td>
+                    <td className="mono" style={{color:"#f59e0b",padding:"7px 10px"}}>{pct!=="—"?pct+" %":"—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>SPOLU</td>
+                <td className="mono" style={{color:"#10b981"}}>{fmt(Array.from({length:12},(_,i)=>getMonthIncome(i+1)).reduce((s,v)=>s+v,0))}</td>
+                {goals.map((g,i)=><td key={g.id} className="mono" style={{color:GCOLS[i%GCOLS.length],fontWeight:700}}>{goalYearTotal(g.id)>0?goalYearTotal(g.id).toFixed(2)+" €":"—"}</td>)}
+                <td className="mono" style={{color:"#10b981"}}>{Array.from({length:12},(_,i)=>goals.reduce((s,g)=>s+getContrib(i+1,g.id),0)).reduce((s,v)=>s+v,0).toFixed(2)+" €"}</td>
+                <td/>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* Goal modal */}
+      {showModal&&(
+        <div className="ov" onClick={e=>{if(e.target===e.currentTarget)setShowModal(false);}}>
+          <div className="modal">
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+              <div style={{fontWeight:800,fontSize:17}}>{editGid?"✏️ Upraviť cieľ":"💰 Nový cieľ"}</div>
+              <button className="ibtn" onClick={()=>setShowModal(false)} style={{fontSize:20,color:"#64748b"}}>×</button>
+            </div>
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:11,color:"#475569",display:"block",marginBottom:7,fontWeight:600,letterSpacing:".5px"}}>IKONA</label>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{GICONS.map(ic=><button key={ic} onClick={()=>setGf(f=>({...f,icon:ic}))} style={{width:35,height:35,borderRadius:7,border:"2px solid",cursor:"pointer",fontSize:16,background:gf.icon===ic?"#1a2540":"#131f35",borderColor:gf.icon===ic?"#10b981":"#253556"}}>{ic}</button>)}</div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:11}}>
+              {[["NÁZOV CIEĽA","name","text","Napr. Dovolenka..."],["CIEĽOVÁ SUMA (€)","target","money","10 000"],["MESAČNÝ PRÍSPEVOK (€)","monthly","money","200"],["AKTUÁLNE NASPORENÉ (€)","current","money","0"],["ROČNÝ VÝNOS % (ETF = 12)","rate","money","12"]].map(([lbl,fld,tp,ph])=>(
+                <div key={fld}><label style={{fontSize:11,color:"#475569",display:"block",marginBottom:5,fontWeight:600,letterSpacing:".5px"}}>{lbl}</label>
+                  {tp==="money"?<MoneyInput value={parseFloat(gf[fld])||0} onSave={v=>setGf(f=>({...f,[fld]:String(v)}))} className="inp mono" style={{width:"100%",padding:"10px 14px",borderRadius:8,border:"1px solid #253556",fontSize:14}} placeholder={ph}/>:<input type="text" className="inp" placeholder={ph} value={gf[fld]} onChange={e=>setGf(f=>({...f,[fld]:e.target.value}))}/>}
+                </div>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:9,marginTop:20}}>
+              <button className="btn-g" style={{flex:1}} onClick={()=>setShowModal(false)}>Zrušiť</button>
+              <button className="btn" style={{flex:2}} onClick={handleSave}>{editGid?"Uložiť zmeny":"Vytvoriť cieľ"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Contribution cell with local state (no lag)
+function ContribCell({value,onSave,color}){
+  const [v,setV]=useState(value===0?"":String(value));
+  const prev=useRef(value);
+  useEffect(()=>{if(value!==prev.current){setV(value===0?"":String(value));prev.current=value;}},[value]);
+  const handleChange=e=>{const raw=e.target.value.replace(",",".");if(/^(\d*\.?\d{0,2})?$/.test(raw))setV(raw);};
+  const handleBlur=()=>{const n=parseFloat(v)||0;onSave(n);prev.current=n;};
+  return <input type="text" inputMode="decimal" value={v} onChange={handleChange} onBlur={handleBlur} placeholder="0.00" className="inp-sm" style={{width:"85px",color:v&&parseFloat(v)>0?color:"#475569",borderColor:v&&parseFloat(v)>0?color+"66":"#253556"}}/>;
+}
+
+// ── YEARLY TAB ─────────────────────────────────────────────────────────────
+function YearTab({yrData,year,month,setMonth}){
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <div className="card" style={{padding:"18px 18px 12px"}}>
+        <div style={{fontWeight:700,fontSize:15,marginBottom:18}}>Ročný prehľad {year}</div>
+        {RC.BarChart?(
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={yrData} barSize={13} barGap={3}>
+              <XAxis dataKey="name" tick={{fill:"#475569",fontSize:11}} axisLine={false} tickLine={false}/>
+              <YAxis tick={{fill:"#475569",fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>v>=1000?`${(v/1000).toFixed(1)}k`:v} width={38}/>
+              <Tooltip contentStyle={{background:"#131f35",border:"1px solid #253556",borderRadius:9,fontSize:12}} formatter={(v,n)=>[fmt(v),n==="income"?"Príjem":n==="expenses"?"Výdavky":"Úspora"]} cursor={{fill:"rgba(255,255,255,0.03)"}}/>
+              <Bar dataKey="income" fill="#10b981" radius={[4,4,0,0]} name="income"/>
+              <Bar dataKey="expenses" fill="#ef4444" radius={[4,4,0,0]} name="expenses"/>
+              <Bar dataKey="savings" fill="#f59e0b" radius={[4,4,0,0]} name="savings"/>
+            </BarChart>
+          </ResponsiveContainer>
+        ):(
+          <SimpleBar data={yrData}/>
+        )}
+        <div style={{display:"flex",gap:18,justifyContent:"center",marginTop:8}}>
+          {[["#10b981","Príjem"],["#ef4444","Výdavky"],["#f59e0b","Úspora"]].map(([c,l])=><div key={l} style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"#64748b"}}><div style={{width:9,height:9,background:c,borderRadius:2}}/>{l}</div>)}
+        </div>
+      </div>
+      <div className="card" style={{overflow:"hidden"}}>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead><tr style={{borderBottom:"1px solid #1a2540"}}>
+              {["Mesiac","Príjem","Výdavky","Úspora","% úspory"].map((h,i)=><th key={h} style={{padding:"11px 14px",textAlign:i===0?"left":"right",color:"#475569",fontWeight:600,fontSize:11,letterSpacing:".5px",textTransform:"uppercase"}}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {yrData.map((row,i)=>{const pct=row.income>0?((row.savings/row.income)*100).toFixed(0):null,hd=row.income>0||row.expenses>0,isSel=month===i+1;return(
+                <tr key={i} onClick={()=>setMonth(i+1)} style={{borderBottom:"1px solid #111e33",cursor:"pointer",background:isSel?"#0d1a2e":"transparent"}} className="txrow">
+                  <td style={{padding:"11px 14px",fontWeight:isSel?700:400,color:isSel?"#10b981":"#e2e8f0"}}>{isSel&&"▶ "}{MONTHS[i]}</td>
+                  <td className="mono" style={{padding:"11px 14px",textAlign:"right",color:"#10b981"}}>{hd?fmt(row.income):<span style={{color:"#253556"}}>—</span>}</td>
+                  <td className="mono" style={{padding:"11px 14px",textAlign:"right",color:"#ef4444"}}>{hd?fmt(row.expenses):<span style={{color:"#253556"}}>—</span>}</td>
+                  <td className="mono" style={{padding:"11px 14px",textAlign:"right",color:row.savings>=0?"#10b981":"#ef4444"}}>{hd?fmt(row.savings):<span style={{color:"#253556"}}>—</span>}</td>
+                  <td className="mono" style={{padding:"11px 14px",textAlign:"right",color:"#f59e0b"}}>{pct!==null&&hd?`${pct} %`:<span style={{color:"#253556"}}>—</span>}</td>
+                </tr>
+              );})}
+            </tbody>
+            <tfoot><tr style={{borderTop:"2px solid #1a2540",background:"#0a0f1f"}}>
+              <td style={{padding:"11px 14px",fontWeight:700,color:"#64748b",fontSize:11,letterSpacing:".5px"}}>SPOLU</td>
+              {["income","expenses","savings"].map(k=>{const tot=yrData.reduce((s,r)=>s+r[k],0),c=k==="income"?"#10b981":k==="expenses"?"#ef4444":tot>=0?"#10b981":"#ef4444";return <td key={k} className="mono" style={{padding:"11px 14px",textAlign:"right",color:c,fontWeight:700}}>{fmt(tot)}</td>;})}
+              <td style={{padding:"11px 14px"}}/>
+            </tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SimpleBar({data}){
+  const max=Math.max(...data.map(d=>Math.max(d.income,d.expenses,1)));
+  return(
+    <div style={{display:"flex",alignItems:"flex-end",gap:4,height:180,padding:"0 4px"}}>
+      {data.map((d,i)=>(
+        <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,height:"100%",justifyContent:"flex-end"}}>
+          <div style={{width:"100%",display:"flex",gap:1,alignItems:"flex-end",height:"85%"}}>
+            <div style={{flex:1,background:"#10b981",borderRadius:"3px 3px 0 0",height:`${(d.income/max)*100}%`,minHeight:d.income>0?2:0,opacity:.85}}/>
+            <div style={{flex:1,background:"#ef4444",borderRadius:"3px 3px 0 0",height:`${(d.expenses/max)*100}%`,minHeight:d.expenses>0?2:0,opacity:.85}}/>
+          </div>
+          <div style={{fontSize:9,color:"#475569"}}>{d.name}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
