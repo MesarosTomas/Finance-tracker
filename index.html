@@ -732,56 +732,60 @@ function ObedyTab({month,year,oaData,saveOa}){
 
   const saveRate=()=>{const r=parseFloat(rateVal)||7.28;saveOa({...oaData,[key]:{...md,dailyRate:r}});setEditRate(false);};
 
-  // Week investment helpers (stored as md.wInv)
   const getWInv=wi=>parseFloat(((md.wInv||{})[String(wi)])||0)||0;
   const setWInv=(wi,val)=>{
     saveOa({...oaData,[key]:{...md,wInv:{...(md.wInv||{}),[String(wi)]:val}}});
   };
 
   // Build rows
+  // KEY LOGIC: hasEntry = user explicitly typed something in "Zaplatené" field
+  //            (flag spentEntered:true is set only when DayCell saves)
+  //            Empty field → rozdiel = null → shows "—" and is NOT counted in totals
   const rows=Array.from({length:dim},(_,i)=>i+1).map(d=>{
     const dd=getDayData(d);
     const wknd=isWknd(d);
     const dayOff=dd.dayOff??wknd;
     const narok=dayOff?0:md.dailyRate;
     const spent=parseFloat(dd.spent)||0;
-    // hasEntry: user explicitly stored data for this workday (even 0.00)
-    const hasEntry=!wknd&&!dayOff&&md.days[String(d)]!==undefined;
-    return{d,dayOff,wknd,narok,spent,rozdiel:narok-spent,dn:DNAMES[getDOW(d)],hasEntry};
+    const hasEntry=!wknd&&!dayOff&&(md.days[String(d)]?.spentEntered===true);
+    const rozdiel=hasEntry?(narok-spent):null;
+    return{d,dayOff,wknd,narok,spent,rozdiel,dn:DNAMES[getDOW(d)],hasEntry};
   });
 
-  // Group into weeks (break on Sunday or last day)
   const weeks=[];let wk=[];
   for(const row of rows){wk.push(row);if(getDOW(row.d)===0||row.d===dim){weeks.push(wk);wk=[];}}
   if(wk.length>0)weeks.push(wk);
 
-  // Calculate weekly stats with carry-over accumulation
+  // Weekly stats — only count hasEntry rows in sums
   const weekStats=[];
   let carry=0;
   for(let wi=0;wi<weeks.length;wi++){
     const wkR=weeks[wi];
-    const wN=wkR.reduce((s,r)=>s+r.narok,0);
-    const wS=wkR.reduce((s,r)=>s+r.spent,0);
-    const wR=wkR.reduce((s,r)=>s+r.rozdiel,0);
-    // Only accumulate positive savings; overspending doesn't reduce investment pool
+    const wN=wkR.reduce((s,r)=>s+(r.hasEntry?r.narok:0),0);
+    const wS=wkR.reduce((s,r)=>s+(r.hasEntry?r.spent:0),0);
+    const wR=wkR.reduce((s,r)=>s+(r.rozdiel!==null?r.rozdiel:0),0);
+    const hasWork=wkR.some(r=>!r.wknd&&!r.dayOff);
     const acc=Math.max(0,carry)+Math.max(0,wR);
     const inv=getWInv(wi);
     const remaining=Math.max(0,acc-inv);
-    weekStats.push({wN,wS,wR,acc,inv,remaining,hasWork:wN>0,prevCarry:carry});
+    weekStats.push({wN,wS,wR,acc,inv,remaining,hasWork,hasEntries:wkR.some(r=>r.hasEntry),prevCarry:carry});
     carry=remaining;
   }
 
-  const totN=rows.reduce((s,r)=>s+r.narok,0);
-  const totS=rows.reduce((s,r)=>s+r.spent,0);
-  const totR=totN-totS;
+  // KPI totals — "Celkový nárok" = full month entitlement (all workdays)
+  const totNAll=rows.filter(r=>!r.dayOff&&!r.wknd).reduce((s,r)=>s+r.narok,0);
+  // Other totals = only entered days
+  const totS=rows.filter(r=>r.hasEntry).reduce((s,r)=>s+r.spent,0);
+  const totR=rows.filter(r=>r.rozdiel!==null).reduce((s,r)=>s+r.rozdiel,0);
   const totInv=Array.from({length:weeks.length},(_,i)=>getWInv(i)).reduce((s,v)=>s+v,0);
+  // Footer table sums = only entered
+  const footN=rows.filter(r=>r.hasEntry).reduce((s,r)=>s+r.narok,0);
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      {/* KPI cards */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10}}>
         {[
-          {l:"Celkový nárok",v:totN,c:"#3b82f6",i:"📋"},
+          {l:"Celkový nárok (mesiac)",v:totNAll,c:"#3b82f6",i:"📋"},
           {l:"Reálne minuté",v:totS,c:"#ef4444",i:"💳"},
           {l:"Úspora obedy",v:totR,c:totR>=0?"#10b981":"#ef4444",i:"✅"},
           {l:"Investované CAR_pie",v:totInv,c:"#a855f7",i:"📈"},
@@ -807,13 +811,24 @@ function ObedyTab({month,year,oaData,saveOa}){
         </div>
       </div>
 
+      {/* Legend */}
+      <div style={{display:"flex",gap:16,fontSize:11,color:"var(--text3)",alignItems:"center",paddingLeft:4}}>
+        <span style={{display:"flex",alignItems:"center",gap:5}}>
+          <span style={{width:12,height:12,background:"rgba(16,185,129,0.15)",borderRadius:3,border:"1px solid rgba(16,185,129,0.3)",display:"inline-block"}}/>
+          Zapísaná hodnota (počíta sa)
+        </span>
+        <span style={{display:"flex",alignItems:"center",gap:5}}>
+          <span style={{width:12,height:12,background:"var(--alt)",borderRadius:3,border:"1px solid var(--border)",display:"inline-block"}}/>
+          Prázdna bunka (nezapočítaná)
+        </span>
+      </div>
+
       <div className="card" style={{overflow:"hidden"}}>
         <div style={{padding:"12px 15px",borderBottom:"1px solid var(--border)",fontWeight:600,fontSize:13,display:"flex",justifyContent:"space-between"}}>
           <span>🍽️ {MONTHS[month-1]} {year}</span>
-          <span style={{fontSize:11,color:"var(--text3)"}}>{rows.filter(r=>!r.dayOff).length} pracovných dní</span>
+          <span style={{fontSize:11,color:"var(--text3)"}}>{rows.filter(r=>!r.dayOff&&!r.wknd).length} pracovných dní · {rows.filter(r=>r.hasEntry).length} zapísaných</span>
         </div>
         <div style={{overflowX:"auto"}}>
-          {/* FIX: use colgroup + multiple tbodys (not nested) for correct alignment */}
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,tableLayout:"fixed"}}>
             <colgroup>
               <col style={{width:"42px"}}/>
@@ -831,82 +846,96 @@ function ObedyTab({month,year,oaData,saveOa}){
               </tr>
             </thead>
 
-            {/* Multiple tbodys — one per week — NO nesting */}
             {weeks.map((wk,wi)=>{
               const ws=weekStats[wi];
               return(
                 <tbody key={wi}>
                   {wk.map(row=>{
                     const wknd=row.wknd;
-                    // Row background logic
                     let rowBg="transparent";
                     if(wknd) rowBg="var(--alt)";
                     else if(row.dayOff) rowBg="var(--hover)";
-                    else if(row.hasEntry) rowBg="rgba(16,185,129,0.08)"; // subtle green = recorded
+                    else if(row.hasEntry) rowBg="rgba(16,185,129,0.08)";
+                    // else: workday, no entry yet → normal/bright background
                     return(
                       <tr key={row.d} style={{background:rowBg,opacity:wknd?.45:1,borderBottom:"1px solid var(--border)",transition:"background .25s"}}>
                         <td style={{padding:"7px 11px",color:row.hasEntry?"var(--text2)":"var(--text3)",fontWeight:row.hasEntry?700:600}}>
-                          {row.hasEntry&&<span style={{color:"#10b981",marginRight:3,fontSize:10}}>●</span>}{row.d}
+                          {row.hasEntry&&<span style={{color:"#10b981",marginRight:3,fontSize:9}}>●</span>}{row.d}
                         </td>
                         <td style={{padding:"7px 5px",color:"var(--text3)",fontSize:11}}>{row.dn}</td>
                         <td style={{padding:"7px 11px"}}>
                           {wknd?<span style={{fontSize:11,color:"var(--border)",fontStyle:"italic"}}>{getDOW(row.d)===0?"Nedeľa":"Sobota"}</span>:(
                             <button onClick={()=>updateDay(row.d,{dayOff:!row.dayOff,spent:row.spent})}
-                              style={{padding:"3px 10px",borderRadius:20,border:"1px solid",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",background:row.dayOff?"var(--inp)":"#062015",borderColor:row.dayOff?"var(--inp-b)":"#10b981",color:row.dayOff?"var(--text3)":"#10b981",transition:"all .15s"}}>
+                              style={{padding:"3px 10px",borderRadius:20,border:"1px solid",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",background:row.dayOff?"var(--inp)":"#062015",borderColor:row.dayOff?"var(--inp-b)":"#10b981",color:row.dayOff?"var(--text3)":"#10b981"}}>
                               {row.dayOff?"🏖 Dovolenka":"✓ Práca"}</button>
                           )}
                         </td>
-                        <td className="mono" style={{padding:"7px 11px",textAlign:"right",color:row.narok>0?"#3b82f6":"var(--border)",fontWeight:600}}>{row.narok>0?row.narok.toFixed(2)+" €":"—"}</td>
+                        <td className="mono" style={{padding:"7px 11px",textAlign:"right",color:row.narok>0?"#3b82f6":"var(--border)",fontWeight:600}}>
+                          {row.narok>0?row.narok.toFixed(2)+" €":"—"}
+                        </td>
                         <td style={{padding:"7px 11px",textAlign:"right"}}>
-                          {!row.dayOff&&!wknd?<DayCell value={row.spent} onSave={v=>updateDay(row.d,{dayOff:false,spent:v})}/>:<span style={{color:"var(--border)"}}>—</span>}
+                          {!row.dayOff&&!wknd?(
+                            <DayCell
+                              value={row.spent}
+                              hasEntry={row.hasEntry}
+                              onSave={v=>updateDay(row.d,{dayOff:false,spent:v,spentEntered:true})}
+                            />
+                          ):<span style={{color:"var(--border)"}}>—</span>}
                         </td>
                         <td className="mono" style={{padding:"7px 11px",textAlign:"right",fontWeight:700,
-                          color:!row.dayOff&&!wknd?(row.rozdiel>0?"#10b981":row.rozdiel<0?"#ef4444":"var(--text3)"):"var(--border)"}}>
-                          {!row.dayOff&&!wknd?((row.rozdiel>=0?"+":"")+row.rozdiel.toFixed(2)+" €"):"—"}
+                          color:row.rozdiel===null?"var(--border)":row.rozdiel>0?"#10b981":row.rozdiel<0?"#ef4444":"var(--text3)"}}>
+                          {row.rozdiel===null?"—":((row.rozdiel>=0?"+":"")+row.rozdiel.toFixed(2)+" €")}
                         </td>
                       </tr>
                     );
                   })}
 
-                  {/* Week summary row */}
+                  {/* Week summary — show only if there are entries */}
                   {ws.hasWork&&(
                     <tr style={{background:"var(--alt)"}}>
-                      <td colSpan={3} style={{padding:"5px 11px",fontSize:10,color:"var(--text3)",fontWeight:700,letterSpacing:".5px"}}>📊 TÝŽDEŇ {wi+1}</td>
-                      <td className="mono" style={{padding:"5px 11px",textAlign:"right",color:"#3b82f6",fontSize:12,fontWeight:700}}>{ws.wN.toFixed(2)} €</td>
-                      <td className="mono" style={{padding:"5px 11px",textAlign:"right",color:"var(--text)",fontSize:12,fontWeight:700}}>{ws.wS.toFixed(2)} €</td>
-                      <td className="mono" style={{padding:"5px 11px",textAlign:"right",fontSize:12,fontWeight:700,color:ws.wR>=0?"#10b981":"#ef4444"}}>{ws.wR>=0?"+":""}{ws.wR.toFixed(2)} €</td>
+                      <td colSpan={3} style={{padding:"5px 11px",fontSize:10,color:"var(--text3)",fontWeight:700,letterSpacing:".5px"}}>
+                        📊 TÝŽDEŇ {wi+1}
+                        {!ws.hasEntries&&<span style={{marginLeft:6,fontWeight:400,opacity:.6}}>(zatiaľ bez zápisov)</span>}
+                      </td>
+                      <td className="mono" style={{padding:"5px 11px",textAlign:"right",color:ws.wN>0?"#3b82f6":"var(--border)",fontSize:12,fontWeight:700}}>
+                        {ws.wN>0?ws.wN.toFixed(2)+" €":"—"}
+                      </td>
+                      <td className="mono" style={{padding:"5px 11px",textAlign:"right",color:ws.hasEntries?"var(--text)":"var(--border)",fontSize:12,fontWeight:700}}>
+                        {ws.hasEntries?ws.wS.toFixed(2)+" €":"—"}
+                      </td>
+                      <td className="mono" style={{padding:"5px 11px",textAlign:"right",fontSize:12,fontWeight:700,
+                        color:ws.hasEntries?(ws.wR>=0?"#10b981":"#ef4444"):"var(--border)"}}>
+                        {ws.hasEntries?((ws.wR>=0?"+":"")+ws.wR.toFixed(2)+" €"):"—"}
+                      </td>
                     </tr>
                   )}
 
-                  {/* CAR_pie investment row */}
+                  {/* CAR_pie investment row — always show for weeks with workdays */}
                   {ws.hasWork&&(
                     <tr style={{borderBottom:"2px solid var(--border)"}}>
                       <td colSpan={6} style={{padding:"8px 11px",background:"#080f20"}}>
                         <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap",fontSize:12}}>
                           <span style={{color:"#a855f7",fontWeight:700,whiteSpace:"nowrap"}}>📈 CAR_pie</span>
-
                           <div style={{display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>
                             <span style={{color:"var(--text3)"}}>K dispozícii:</span>
-                            <span className="mono" style={{color:"#f59e0b",fontWeight:700}}>{ws.acc.toFixed(2)} €</span>
+                            <span className="mono" style={{color:ws.acc>0?"#f59e0b":"var(--text3)",fontWeight:700}}>{ws.acc.toFixed(2)} €</span>
                             {wi>0&&weekStats[wi-1].remaining>0&&(
                               <span style={{color:"var(--text3)",fontSize:10,fontStyle:"italic"}}>
                                 (z toho {weekStats[wi-1].remaining.toFixed(2)} € z min. týžd.)
                               </span>
                             )}
                           </div>
-
                           <div style={{display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>
                             <span style={{color:"var(--text3)"}}>Investoval som:</span>
                             <InvestCell value={ws.inv} onSave={v=>setWInv(wi,v)}/>
                             <span style={{color:"var(--text3)"}}>€</span>
                           </div>
-
                           <div style={{display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>
                             <span style={{color:"var(--text3)"}}>Prechádza ďalej →</span>
                             <span className="mono" style={{
-                              color:ws.remaining>0?"#10b981":ws.remaining===0?"var(--text3)":"#ef4444",
+                              color:ws.remaining>0?"#10b981":"var(--text3)",
                               fontWeight:700,
-                              background:ws.remaining===0?"transparent":"rgba(16,185,129,0.1)",
+                              background:ws.remaining>0?"rgba(16,185,129,0.1)":"transparent",
                               padding:"1px 6px",borderRadius:6
                             }}>{ws.remaining.toFixed(2)} €</span>
                           </div>
@@ -920,10 +949,18 @@ function ObedyTab({month,year,oaData,saveOa}){
 
             <tfoot>
               <tr style={{background:"var(--surface)",borderTop:"2px solid var(--inp-b)"}}>
-                <td colSpan={3} style={{padding:"10px 11px",fontWeight:800,fontSize:11,color:"var(--text2)",letterSpacing:".5px"}}>MESAČNÝ SÚČET</td>
-                <td className="mono" style={{padding:"10px 11px",textAlign:"right",color:"#3b82f6",fontWeight:800}}>{totN.toFixed(2)} €</td>
-                <td className="mono" style={{padding:"10px 11px",textAlign:"right",color:"var(--text)",fontWeight:800}}>{totS.toFixed(2)} €</td>
-                <td className="mono" style={{padding:"10px 11px",textAlign:"right",fontWeight:800,color:totR>=0?"#10b981":"#ef4444"}}>{totR>=0?"+":""}{totR.toFixed(2)} €</td>
+                <td colSpan={3} style={{padding:"10px 11px",fontWeight:800,fontSize:11,color:"var(--text2)",letterSpacing:".5px"}}>
+                  SÚČET ZAPÍSANÝCH ({rows.filter(r=>r.hasEntry).length} dní)
+                </td>
+                <td className="mono" style={{padding:"10px 11px",textAlign:"right",color:"#3b82f6",fontWeight:800}}>
+                  {footN>0?footN.toFixed(2)+" €":"—"}
+                </td>
+                <td className="mono" style={{padding:"10px 11px",textAlign:"right",color:"var(--text)",fontWeight:800}}>
+                  {totS.toFixed(2)} €
+                </td>
+                <td className="mono" style={{padding:"10px 11px",textAlign:"right",fontWeight:800,color:totR>=0?"#10b981":"#ef4444"}}>
+                  {totR>=0?"+":""}{totR.toFixed(2)} €
+                </td>
               </tr>
             </tfoot>
           </table>
@@ -933,15 +970,52 @@ function ObedyTab({month,year,oaData,saveOa}){
   );
 }
 
-function DayCell({value,onSave}){
-  const [v,setV]=useState(value===0?"":String(value));
+// DayCell — shows placeholder when empty, green tint border when has entry
+function DayCell({value,onSave,hasEntry}){
+  const [v,setV]=useState(value===0&&!hasEntry?"":String(value===0&&hasEntry?"0.00":value||""));
+  const [focused,setFocused]=useState(false);
   const prev=useRef(value);
-  useEffect(()=>{if(value!==prev.current){setV(value===0?"":String(value));prev.current=value;}},[value]);
+  const entryRef=useRef(hasEntry);
+
+  useEffect(()=>{
+    if(value!==prev.current||hasEntry!==entryRef.current){
+      setV(value===0&&!hasEntry?"":value===0&&hasEntry?"0.00":String(value||""));
+      prev.current=value;entryRef.current=hasEntry;
+    }
+  },[value,hasEntry]);
+
   const handleChange=e=>{const raw=e.target.value.replace(",",".");if(/^(\d*\.?\d{0,2})?$/.test(raw))setV(raw);};
-  const handleBlur=()=>{const n=parseFloat(v)||0;onSave(n);prev.current=n;};
+  const handleBlur=()=>{
+    setFocused(false);
+    // Only save if user typed something (even 0 or 0.00)
+    // If field still empty after blur, don't mark as entered
+    const n=parseFloat(v);
+    if(v.trim()!==""){onSave(isNaN(n)?0:n);}
+    else if(hasEntry){onSave(0);}  // was entered before, keep as 0
+  };
+  const handleFocus=()=>setFocused(true);
+
+  const borderCol=hasEntry?"rgba(16,185,129,0.5)":focused?"var(--inp-b)":"var(--inp-b)";
+  const bgCol=hasEntry?"rgba(16,185,129,0.06)":"var(--inp)";
+
   return(
     <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:4}}>
-      <input type="text" inputMode="decimal" className="inp-sm" value={v} onChange={handleChange} onBlur={handleBlur} placeholder="0.00"/>
+      <input
+        type="text" inputMode="decimal"
+        className="inp-sm"
+        value={v}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        onFocus={handleFocus}
+        placeholder={hasEntry?"":"zadaj..."}
+        style={{
+          width:72,
+          borderColor:borderCol,
+          background:bgCol,
+          color:hasEntry?"var(--text)":"var(--text3)",
+          fontWeight:hasEntry?600:400,
+        }}
+      />
       <span style={{fontSize:11,color:"var(--text3)"}}>€</span>
     </div>
   );
