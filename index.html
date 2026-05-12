@@ -99,6 +99,7 @@ body.light .ov{background:rgba(0,0,0,.5)}
 }
 .print-only{display:none}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
 <div id="root"></div>
@@ -132,9 +133,56 @@ const DEF_ACCOUNTS=[
 ];
 
 // ── STORAGE ───────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://aqkagjpaxpmmbdlkxufn.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFxa2FnanBheHBtbWJkbGt4dWZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1NjQxMDUsImV4cCI6MjA5NDE0MDEwNX0.vVoXt9NAig_fK55COCy24U0-1rWvmyDvMk-G6WnA7Og';
+const _supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 const ls={
   get:(k)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch{return null;}},
   set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
+};
+
+// Map tx object → DB row (desc→description)
+const txToRow = tx => {
+  const r={...tx, description: tx.desc||tx.description||''};
+  delete r.desc;
+  return r;
+};
+// Map DB row → tx object (description→desc)
+const rowToTx = r => ({...r, desc: r.description});
+
+const db = {
+  async loadAll() {
+    try {
+      const [txRes, dataRes] = await Promise.all([
+        _supa.from('transactions').select('*').order('date', {ascending:false}),
+        _supa.from('app_data').select('*')
+      ]);
+      const txs = (txRes.data||[]).map(rowToTx);
+      const appData = {};
+      (dataRes.data||[]).forEach(r => { appData[r.key] = r.value; });
+      return {txs, appData};
+    } catch(e) {
+      console.warn('Supabase load failed, using localStorage:', e);
+      return null;
+    }
+  },
+  async setTxs(newTxs, oldTxs) {
+    try {
+      const oldIds = new Set((oldTxs||[]).map(t=>t.id));
+      const newIds = new Set(newTxs.map(t=>t.id));
+      const toDelete = [...oldIds].filter(id=>!newIds.has(id));
+      if(toDelete.length>0) await _supa.from('transactions').delete().in('id', toDelete);
+      if(newTxs.length>0) await _supa.from('transactions').upsert(newTxs.map(txToRow));
+    } catch(e) { console.warn('Supabase setTxs failed:', e); }
+    ls.set('fin_txs', newTxs);
+  },
+  async setAppData(key, value) {
+    try {
+      await _supa.from('app_data').upsert({key, value, updated_at: new Date().toISOString()});
+    } catch(e) { console.warn('Supabase setAppData failed:', e); }
+    ls.set(key, value);
+  }
 };
 const fmt=(n)=>Math.abs(n).toLocaleString("sk-SK",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
 const isInc=(tx)=>tx.type==="Príjem"||(tx.type==="Prevod"&&(tx.dir||tx.direction)==="in");
@@ -256,7 +304,8 @@ function exportPDF({month,year,txs,budgets,catSpend,income,expenses,savings,goal
   .budget-bar{height:10px;background:#eee;border-radius:5px;overflow:hidden;margin-top:3px}
   .footer{margin-top:24px;padding-top:10px;border-top:1px solid #eee;font-size:10px;color:#999;text-align:center}
   @media print{body{padding:16px}.no-print{display:none}}
-  </style></head><body>
+  </style><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head><body>
   <button class="no-print" onclick="window.print()" style="background:#10b981;color:white;border:none;padding:10px 20px;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px;margin-bottom:16px">🖨️ Tlačiť / Uložiť ako PDF</button>
   <div class="print-title">💰 FinanceTracker — Mesačný výpis</div>
   <div class="print-sub">${mName} ${year} · Vygenerované ${new Date().toLocaleDateString("sk-SK")}</div>
@@ -339,16 +388,35 @@ function App(){
   const [form,setForm]=useState({date:now.toISOString().slice(0,10),desc:"",cat:"Potraviny nákup",type:"Výdavok",amount:"",dir:"out",note:"",tags:[],accountId:"acc1",recurring:false,recurringDay:1});
 
   useEffect(()=>{
-    setTxs(ls.get("fin_txs")||[]);
-    setBudgets({...DEF_BUDGETS,...(ls.get("fin_budgets")||{})});
-    setGoals(ls.get("fin_goals")||DEF_GOALS);
-    setOaData(ls.get("fin_obedy")||{});
-    setContribs(ls.get("fin_contribs")||{});
-    setCustomCats(ls.get("fin_cats")||[]);
-    setAccounts(ls.get("fin_accounts")||DEF_ACCOUNTS);
-    const savedTheme=ls.get("fin_theme");
-    if(savedTheme!==null) setDarkMode(savedTheme);
-    setLoading(false);
+    const load = async () => {
+      // Try Supabase first, fallback to localStorage
+      const remote = await db.loadAll();
+      if(remote) {
+        const {txs: remoteTxs, appData} = remote;
+        // Merge: prefer remote if non-empty, else localStorage
+        const txs = remoteTxs.length>0 ? remoteTxs : (ls.get("fin_txs")||[]);
+        setTxs(txs);
+        setBudgets({...DEF_BUDGETS,...(appData["fin_budgets"]||ls.get("fin_budgets")||{})});
+        setGoals(appData["fin_goals"]||ls.get("fin_goals")||DEF_GOALS);
+        setOaData(appData["fin_obedy"]||ls.get("fin_obedy")||{});
+        setContribs(appData["fin_contribs"]||ls.get("fin_contribs")||{});
+        setCustomCats(appData["fin_cats"]||ls.get("fin_cats")||[]);
+        setAccounts(appData["fin_accounts"]||ls.get("fin_accounts")||DEF_ACCOUNTS);
+      } else {
+        // Offline fallback
+        setTxs(ls.get("fin_txs")||[]);
+        setBudgets({...DEF_BUDGETS,...(ls.get("fin_budgets")||{})});
+        setGoals(ls.get("fin_goals")||DEF_GOALS);
+        setOaData(ls.get("fin_obedy")||{});
+        setContribs(ls.get("fin_contribs")||{});
+        setCustomCats(ls.get("fin_cats")||[]);
+        setAccounts(ls.get("fin_accounts")||DEF_ACCOUNTS);
+      }
+      const savedTheme=ls.get("fin_theme");
+      if(savedTheme!==null) setDarkMode(savedTheme);
+      setLoading(false);
+    };
+    load();
   },[]);
 
   useEffect(()=>{
@@ -356,13 +424,16 @@ function App(){
     ls.set("fin_theme",darkMode);
   },[darkMode]);
 
-  const saveTxs=v=>{ls.set("fin_txs",v);setTxs(v)};
-  const saveBudgets=v=>{ls.set("fin_budgets",v);setBudgets(v)};
-  const saveGoals=v=>{ls.set("fin_goals",v);setGoals(v)};
-  const saveOa=v=>{ls.set("fin_obedy",v);setOaData(v)};
-  const saveContribs=v=>{ls.set("fin_contribs",v);setContribs(v)};
-  const saveCats=v=>{ls.set("fin_cats",v);setCustomCats(v)};
-  const saveAccounts=v=>{ls.set("fin_accounts",v);setAccounts(v)};
+  const txsRef = useRef(txs);
+  useEffect(()=>{txsRef.current=txs;},[txs]);
+
+  const saveTxs=async(v)=>{await db.setTxs(v,txsRef.current);setTxs(v)};
+  const saveBudgets=async(v)=>{await db.setAppData("fin_budgets",v);setBudgets(v)};
+  const saveGoals=async(v)=>{await db.setAppData("fin_goals",v);setGoals(v)};
+  const saveOa=async(v)=>{await db.setAppData("fin_obedy",v);setOaData(v)};
+  const saveContribs=async(v)=>{await db.setAppData("fin_contribs",v);setContribs(v)};
+  const saveCats=async(v)=>{await db.setAppData("fin_cats",v);setCustomCats(v)};
+  const saveAccounts=async(v)=>{await db.setAppData("fin_accounts",v);setAccounts(v)};
 
   const allExpCats=useMemo(()=>[...EXP_CATS,...customCats],[customCats]);
   const mTxs=useMemo(()=>txs.filter(tx=>tx.month===month&&tx.year===year),[txs,month,year]);
@@ -422,7 +493,13 @@ function App(){
   const handleBudgSave=()=>{const u={...budgets};Object.keys(budgEdit).forEach(k=>{u[k]=parseFloat(budgEdit[k])||0;});saveBudgets(u);setBudgEdit({});};
   const handleAddCat=()=>{if(!newCat.trim()||allExpCats.includes(newCat.trim()))return;saveCats([...customCats,newCat.trim()]);setNewCat("");};
 
-  if(loading) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",color:"#10b981",fontSize:16}}>Načítavam...</div>;
+  if(loading) return (
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100vh",color:"#10b981",fontSize:16,gap:12}}>
+      <div style={{fontSize:28}}>💰</div>
+      <div>Načítavam z cloudu...</div>
+      <div style={{fontSize:12,color:"#334155"}}>Supabase · {SUPABASE_URL}</div>
+    </div>
+  );
 
   const catOpts=form.type==="Príjem"?INC_CATS:allExpCats;
 
