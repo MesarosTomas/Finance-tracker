@@ -392,15 +392,43 @@ function App(){
       const remote = await db.loadAll();
       if(remote) {
         const {txs: remoteTxs, appData} = remote;
-        // Merge: prefer remote if non-empty, else localStorage
-        const txs = remoteTxs.length>0 ? remoteTxs : (ls.get("fin_txs")||[]);
-        setTxs(txs);
-        setBudgets({...DEF_BUDGETS,...(appData["fin_budgets"]||ls.get("fin_budgets")||{})});
-        setGoals(appData["fin_goals"]||ls.get("fin_goals")||DEF_GOALS);
-        setOaData(appData["fin_obedy"]||ls.get("fin_obedy")||{});
-        setContribs(appData["fin_contribs"]||ls.get("fin_contribs")||{});
-        setCustomCats(appData["fin_cats"]||ls.get("fin_cats")||[]);
-        setAccounts(appData["fin_accounts"]||ls.get("fin_accounts")||DEF_ACCOUNTS);
+        const lsTxs = ls.get("fin_txs")||[];
+        const lsBudgets = ls.get("fin_budgets")||{};
+        const lsGoals = ls.get("fin_goals");
+        const lsOa = ls.get("fin_obedy")||{};
+        const lsContribs = ls.get("fin_contribs")||{};
+        const lsCats = ls.get("fin_cats")||[];
+        const lsAccounts = ls.get("fin_accounts");
+
+        // Use cloud data if available, else localStorage
+        const finalTxs = remoteTxs.length>0 ? remoteTxs : lsTxs;
+        const finalBudgets = Object.keys(appData["fin_budgets"]||{}).length>0 ? appData["fin_budgets"] : lsBudgets;
+        const finalGoals = appData["fin_goals"] || lsGoals || DEF_GOALS;
+        const finalOa = Object.keys(appData["fin_obedy"]||{}).length>0 ? appData["fin_obedy"] : lsOa;
+        const finalContribs = appData["fin_contribs"] || lsContribs;
+        const finalCats = appData["fin_cats"] || lsCats;
+        const finalAccounts = appData["fin_accounts"] || lsAccounts || DEF_ACCOUNTS;
+
+        setTxs(finalTxs);
+        setBudgets({...DEF_BUDGETS,...finalBudgets});
+        setGoals(finalGoals);
+        setOaData(finalOa);
+        setContribs(finalContribs);
+        setCustomCats(finalCats);
+        setAccounts(finalAccounts);
+
+        // AUTO-MIGRATE: if cloud is empty but localStorage has data → push to cloud silently
+        if(remoteTxs.length===0 && lsTxs.length>0) {
+          console.log("Auto-migrating localStorage data to Supabase...");
+          db.setTxs(lsTxs,[]).catch(console.warn);
+          if(lsBudgets) db.setAppData("fin_budgets",{...DEF_BUDGETS,...lsBudgets}).catch(console.warn);
+          if(lsGoals) db.setAppData("fin_goals",lsGoals).catch(console.warn);
+          if(Object.keys(lsOa).length>0) db.setAppData("fin_obedy",lsOa).catch(console.warn);
+          if(Object.keys(lsContribs).length>0) db.setAppData("fin_contribs",lsContribs).catch(console.warn);
+          if(lsCats.length>0) db.setAppData("fin_cats",lsCats).catch(console.warn);
+          if(lsAccounts) db.setAppData("fin_accounts",lsAccounts).catch(console.warn);
+          console.log("Auto-migration done.");
+        }
       } else {
         // Offline fallback
         setTxs(ls.get("fin_txs")||[]);
@@ -433,6 +461,53 @@ function App(){
   const saveContribs=async(v)=>{await db.setAppData("fin_contribs",v);setContribs(v)};
   const saveCats=async(v)=>{await db.setAppData("fin_cats",v);setCustomCats(v)};
   const saveAccounts=async(v)=>{await db.setAppData("fin_accounts",v);setAccounts(v)};
+
+  const [syncing,setSyncing]=useState(false);
+  const [syncDone,setSyncDone]=useState(false);
+
+  const syncToCloud=async()=>{
+    setSyncing(true);
+    try {
+      const allTxs=txs.length>0?txs:(ls.get("fin_txs")||[]);
+      await db.setTxs(allTxs,[]);
+      await db.setAppData("fin_budgets",budgets);
+      await db.setAppData("fin_goals",goals);
+      await db.setAppData("fin_obedy",oaData);
+      await db.setAppData("fin_contribs",contribs);
+      await db.setAppData("fin_cats",customCats);
+      await db.setAppData("fin_accounts",accounts);
+      setSyncDone(true);
+      setTimeout(()=>setSyncDone(false),4000);
+      alert("\u2705 V\u0161etky d\u00e1ta boli synchronizovan\u00e9 do cloudu!\nTeraz ich uvid\u00ed\u0161 aj na mobile.");
+    } catch(e) {
+      alert("\u274c Sync zlyhal: "+e.message);
+    }
+    setSyncing(false);
+  };
+
+  const [syncing,setSyncing]=useState(false);
+  const [syncDone,setSyncDone]=useState(false);
+
+  const syncToCloud=async()=>{
+    setSyncing(true);
+    try {
+      // Push all current state to Supabase
+      const allTxs=txs.length>0?txs:(ls.get("fin_txs")||[]);
+      await db.setTxs(allTxs,[]);
+      await db.setAppData("fin_budgets",budgets);
+      await db.setAppData("fin_goals",goals);
+      await db.setAppData("fin_obedy",oaData);
+      await db.setAppData("fin_contribs",contribs);
+      await db.setAppData("fin_cats",customCats);
+      await db.setAppData("fin_accounts",accounts);
+      setSyncDone(true);
+      setTimeout(()=>setSyncDone(false),4000);
+      alert("✅ Všetky dáta boli synchronizované do cloudu!\nTeraz ich uvidíš aj na mobile.");
+    } catch(e) {
+      alert("❌ Sync zlyhal: "+e.message);
+    }
+    setSyncing(false);
+  };
 
   const allExpCats=useMemo(()=>[...EXP_CATS,...customCats],[customCats]);
   const mTxs=useMemo(()=>txs.filter(tx=>tx.month===month&&tx.year===year),[txs,month,year]);
@@ -513,6 +588,10 @@ function App(){
           <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
             <button className="btn-sm" onClick={applyRecurring} title="Aplikovať opakujúce sa transakcie">🔄 Opakovanie</button>
             <button className="btn-sm" onClick={()=>exportPDF({month,year,txs,budgets,catSpend,income,expenses,savings,goals,oaData,customCats,allExpCats})}>🖨️ PDF</button>
+            <button className="btn-sm" onClick={syncToCloud}
+              style={{background:syncDone?"#10b98133":syncing?"#1a2540":"var(--inp)",color:syncDone?"#10b981":syncing?"#64748b":"var(--text2)",borderColor:syncDone?"#10b981":"var(--inp-b)",transition:"all .3s",minWidth:90}}>
+              {syncing?"⏳ Sync...":syncDone?"✅ Hotovo!":"☁️ Sync"}
+            </button>
             <button className="btn-sm" onClick={()=>setDarkMode(d=>!d)} style={{fontSize:16,padding:"3px 8px"}}>{darkMode?"☀️":"🌙"}</button>
             <select className="inp" style={{width:"auto",padding:"5px 9px",fontSize:13}} value={month} onChange={e=>setMonth(+e.target.value)}>{MONTHS.map((m,i)=><option key={i} value={i+1}>{m}</option>)}</select>
             <select className="inp" style={{width:"auto",padding:"5px 9px",fontSize:13}} value={year} onChange={e=>setYear(+e.target.value)}>{[2024,2025,2026,2027].map(y=><option key={y}>{y}</option>)}</select>
