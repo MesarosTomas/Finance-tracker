@@ -462,53 +462,6 @@ function App(){
   const saveCats=async(v)=>{await db.setAppData("fin_cats",v);setCustomCats(v)};
   const saveAccounts=async(v)=>{await db.setAppData("fin_accounts",v);setAccounts(v)};
 
-  const [syncing,setSyncing]=useState(false);
-  const [syncDone,setSyncDone]=useState(false);
-
-  const syncToCloud=async()=>{
-    setSyncing(true);
-    try {
-      const allTxs=txs.length>0?txs:(ls.get("fin_txs")||[]);
-      await db.setTxs(allTxs,[]);
-      await db.setAppData("fin_budgets",budgets);
-      await db.setAppData("fin_goals",goals);
-      await db.setAppData("fin_obedy",oaData);
-      await db.setAppData("fin_contribs",contribs);
-      await db.setAppData("fin_cats",customCats);
-      await db.setAppData("fin_accounts",accounts);
-      setSyncDone(true);
-      setTimeout(()=>setSyncDone(false),4000);
-      alert("\u2705 V\u0161etky d\u00e1ta boli synchronizovan\u00e9 do cloudu!\nTeraz ich uvid\u00ed\u0161 aj na mobile.");
-    } catch(e) {
-      alert("\u274c Sync zlyhal: "+e.message);
-    }
-    setSyncing(false);
-  };
-
-  const [syncing,setSyncing]=useState(false);
-  const [syncDone,setSyncDone]=useState(false);
-
-  const syncToCloud=async()=>{
-    setSyncing(true);
-    try {
-      // Push all current state to Supabase
-      const allTxs=txs.length>0?txs:(ls.get("fin_txs")||[]);
-      await db.setTxs(allTxs,[]);
-      await db.setAppData("fin_budgets",budgets);
-      await db.setAppData("fin_goals",goals);
-      await db.setAppData("fin_obedy",oaData);
-      await db.setAppData("fin_contribs",contribs);
-      await db.setAppData("fin_cats",customCats);
-      await db.setAppData("fin_accounts",accounts);
-      setSyncDone(true);
-      setTimeout(()=>setSyncDone(false),4000);
-      alert("✅ Všetky dáta boli synchronizované do cloudu!\nTeraz ich uvidíš aj na mobile.");
-    } catch(e) {
-      alert("❌ Sync zlyhal: "+e.message);
-    }
-    setSyncing(false);
-  };
-
   const allExpCats=useMemo(()=>[...EXP_CATS,...customCats],[customCats]);
   const mTxs=useMemo(()=>txs.filter(tx=>tx.month===month&&tx.year===year),[txs,month,year]);
   const income=useMemo(()=>mTxs.filter(isInc).reduce((s,tx)=>s+tx.amount,0),[mTxs]);
@@ -567,6 +520,27 @@ function App(){
   const handleBudgSave=()=>{const u={...budgets};Object.keys(budgEdit).forEach(k=>{u[k]=parseFloat(budgEdit[k])||0;});saveBudgets(u);setBudgEdit({});};
   const handleAddCat=()=>{if(!newCat.trim()||allExpCats.includes(newCat.trim()))return;saveCats([...customCats,newCat.trim()]);setNewCat("");};
 
+
+  const [syncing,setSyncing]=useState(false);
+  const [syncDone,setSyncDone]=useState(false);
+
+  const syncToCloud=async()=>{
+    setSyncing(true);
+    try{
+      const allTxs=txs.length>0?txs:(ls.get("fin_txs")||[]);
+      await db.setTxs(allTxs,[]);
+      await db.setAppData("fin_budgets",budgets);
+      await db.setAppData("fin_goals",goals);
+      await db.setAppData("fin_obedy",oaData);
+      await db.setAppData("fin_contribs",contribs);
+      await db.setAppData("fin_cats",customCats);
+      await db.setAppData("fin_accounts",accounts);
+      setSyncDone(true);
+      setTimeout(()=>setSyncDone(false),4000);
+      alert("✅ Všetky dáta synchronizované! Na mobile obnov stránku.");
+    }catch(e){alert("❌ Sync zlyhal: "+e.message);}
+    setSyncing(false);
+  };
   if(loading) return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100vh",color:"#10b981",fontSize:16,gap:12}}>
       <div style={{fontSize:28}}>💰</div>
