@@ -142,14 +142,34 @@ const ls={
   set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
 };
 
-// Map tx object → DB row (desc→description)
-const txToRow = tx => {
-  const r={...tx, description: tx.desc||tx.description||''};
-  delete r.desc;
-  return r;
-};
-// Map DB row → tx object (description→desc)
-const rowToTx = r => ({...r, desc: r.description});
+// Map tx object → DB row (camelCase → snake_case)
+const txToRow = tx => ({
+  id: tx.id,
+  date: tx.date||'',
+  description: tx.desc||tx.description||'',
+  cat: tx.cat||tx.category||'',
+  type: tx.type||'Výdavok',
+  amount: parseFloat(tx.amount)||0,
+  dir: tx.dir||tx.direction||'out',
+  note: tx.note||'',
+  tags: tx.tags||[],
+  account_id: tx.accountId||tx.account_id||'acc1',
+  account_name: tx.accountName||tx.account_name||'',
+  recurring: tx.recurring||false,
+  recurring_day: tx.recurringDay||tx.recurring_day||null,
+  month: tx.month||1,
+  year: tx.year||new Date().getFullYear(),
+});
+// Map DB row → tx object (snake_case → camelCase)
+const rowToTx = r => ({
+  ...r,
+  desc: r.description,
+  cat: r.cat,
+  dir: r.dir,
+  accountId: r.account_id,
+  accountName: r.account_name,
+  recurringDay: r.recurring_day,
+});
 
 const db = {
   async loadAll() {
@@ -168,19 +188,23 @@ const db = {
     }
   },
   async setTxs(newTxs, oldTxs) {
-    try {
-      const oldIds = new Set((oldTxs||[]).map(t=>t.id));
-      const newIds = new Set(newTxs.map(t=>t.id));
-      const toDelete = [...oldIds].filter(id=>!newIds.has(id));
-      if(toDelete.length>0) await _supa.from('transactions').delete().in('id', toDelete);
-      if(newTxs.length>0) await _supa.from('transactions').upsert(newTxs.map(txToRow));
-    } catch(e) { console.warn('Supabase setTxs failed:', e); }
+    const oldIds = new Set((oldTxs||[]).map(t=>t.id));
+    const newIds = new Set(newTxs.map(t=>t.id));
+    const toDelete = [...oldIds].filter(id=>!newIds.has(id));
+    if(toDelete.length>0){
+      const {error:delErr} = await _supa.from('transactions').delete().in('id', toDelete);
+      if(delErr) throw delErr;
+    }
+    if(newTxs.length>0){
+      const rows = newTxs.map(txToRow);
+      const {error:upsErr} = await _supa.from('transactions').upsert(rows);
+      if(upsErr) throw upsErr;
+    }
     ls.set('fin_txs', newTxs);
   },
   async setAppData(key, value) {
-    try {
-      await _supa.from('app_data').upsert({key, value, updated_at: new Date().toISOString()});
-    } catch(e) { console.warn('Supabase setAppData failed:', e); }
+    const {error} = await _supa.from('app_data').upsert({key, value, updated_at: new Date().toISOString()});
+    if(error) throw error;
     ls.set(key, value);
   }
 };
@@ -538,7 +562,10 @@ function App(){
       setSyncDone(true);
       setTimeout(()=>setSyncDone(false),4000);
       alert("✅ Všetky dáta synchronizované! Na mobile obnov stránku.");
-    }catch(e){alert("❌ Sync zlyhal: "+e.message);}
+    }catch(e){
+      console.error('Sync error:',e);
+      alert("❌ Sync zlyhal: "+JSON.stringify(e));
+    }
     setSyncing(false);
   };
   if(loading) return (
